@@ -49,12 +49,14 @@ async function installFixture(page: Page, deny = false) {
 async function open(page: Page, deny = false) {
   await installFixture(page, deny);
   await page.goto("/overlay");
+  await expect(page.locator(".overlay-launcher > .card")).toHaveText(
+    "Start ExamAsk PermissionDisconnect",
+  );
+  await expect(page.locator(".overlay-launcher > .card button")).toHaveCount(3);
   await page.getByRole("checkbox").check();
-  await page
-    .getByRole("button", { name: "Answer Overlay", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Start Exam", exact: true }).click();
   await expect(page.locator("#test-pip")).toBeVisible();
-  await page.getByRole("button", { name: "Start Authorized Capture" }).click();
+  await page.getByRole("button", { name: "Ask Permission" }).click();
   return page.frameLocator("#test-pip");
 }
 async function stopped(page: Page) {
@@ -92,12 +94,10 @@ test("unsupported PiP gives a clear error without a popup or capture", async ({
   );
   await page.goto("/overlay");
   await page.getByRole("checkbox").check();
-  await page
-    .getByRole("button", { name: "Answer Overlay", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Start Exam", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("unavailable");
   await expect(
-    page.getByRole("button", { name: "Start Authorized Capture" }),
+    page.getByRole("button", { name: "Ask Permission" }),
   ).toBeDisabled();
 });
 test("permission denial leaves no processing or answer", async ({ page }) => {

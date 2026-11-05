@@ -480,8 +480,6 @@ export default function AnswerOverlay() {
             A separate floating assistant for explicitly authorized practice.
             Your existing mobile assistant is unchanged.
           </p>
-        </header>
-        <section className="card">
           <label className="consent">
             <input
               type="checkbox"
@@ -490,18 +488,20 @@ export default function AnswerOverlay() {
             />
             I am authorized to capture this content and use AI assistance.
           </label>
+        </header>
+        <section className="card">
           <div className="actions">
             <button
               disabled={!consent || !!pip || opening}
               onClick={openOverlay}
             >
-              Answer Overlay
+              Start Exam
             </button>
             <button
               disabled={!consent || !pip || sharing || starting}
               onClick={startCapture}
             >
-              Start Authorized Capture
+              Ask Permission
             </button>
             <button
               disabled={!pip && !credentials}
@@ -510,44 +510,17 @@ export default function AnswerOverlay() {
               Disconnect
             </button>
           </div>
-          <p>
-            First open the floating window, then click Start Authorized Capture
-            here. In Chrome’s native picker, select only the permitted Edge
-            assessment window or screen. No microphone, recording, or automatic
-            screenshots are used.
-          </p>
-          <p role="status" className={sharing ? "capture-banner" : ""}>
-            {sharing
-              ? "Screen sharing is active. AI runs only when you press Refresh."
-              : message || "Disconnected"}
-          </p>
-          {(notice || connectionError) && (
-            <p role="alert" className="notice">
-              {notice || connectionError}
-            </p>
-          )}
-          <dl>
-            <dt>Picture-in-Picture support</dt>
-            <dd>{pipAPI() ? "Available" : "Unavailable"}</dd>
-            <dt>Connection</dt>
-            <dd>{connected && active ? "Authenticated" : "Disconnected"}</dd>
-            <dt>Session expiration</dt>
-            <dd>
-              {snapshot
-                ? new Date(snapshot.expiresAt).toLocaleTimeString()
-                : "No session"}
-            </dd>
-          </dl>
-          <p>
-            Keep this Chrome page open while using Edge. Position the overlay
-            through normal window controls. Protected or exclusive-fullscreen
-            applications may cover or block it.
-          </p>
-          <a href="/">Mobile assistant</a> ·{" "}
-          <a href="/practice" target="_blank" rel="noreferrer">
-            Mock assessment
-          </a>
         </section>
+        <p role="status" className={sharing ? "capture-banner" : ""}>
+          {sharing
+            ? "Screen sharing is active. AI runs only when you press Refresh."
+            : message || "Disconnected"}
+        </p>
+        {(notice || connectionError) && (
+          <p role="alert" className="notice">
+            {notice || connectionError}
+          </p>
+        )}
       </main>
       {floating}
     </>

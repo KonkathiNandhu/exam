@@ -15,8 +15,8 @@ npm start
 Open http://localhost:3000/overlay in desktop Google Chrome. Localhost is a trustworthy local context; deployments require approved HTTPS. The existing backend `AI_API_KEY` must be configured for real extraction and suggestions. The current workspace key was empty when checked, so live AI remains unavailable until a valid key is added locally and the server restarted. Do not put keys in frontend code or URLs.
 
 1. In Edge, open the authorized mock assessment at `/practice` and keep the complete Java question and choices visible.
-2. In Chrome `/overlay`, acknowledge authorized capture and AI assistance. Click **Answer Overlay**. It requests a 260 × 320 CSS-pixel Document Picture-in-Picture window; Chrome may adjust that size.
-3. Click **Start Authorized Capture** on the main Chrome page. Select the approved Edge window or screen in Chrome's native picker. This is a separate user gesture because both browser APIs require activation; the app does not attempt to reuse or bypass consumed browser activation. Audio is disabled.
+2. In Chrome `/overlay`, acknowledge authorized capture and AI assistance. Click **Start Exam**. It requests a 260 × 320 CSS-pixel Document Picture-in-Picture window; Chrome may adjust that size.
+3. Click **Ask Permission** on the main Chrome page. Select the approved Edge window or screen in Chrome's native picker. This is a separate user gesture because both browser APIs require activation; the app does not attempt to reuse or bypass consumed browser activation. Audio is disabled.
 4. Keep the main Chrome page open. Its visible status confirms capture permission is active. Move the floating window through the browser/OS window controls.
 5. Tap the green Refresh icon. Exactly one resized JPEG frame is sent through the existing authenticated `/refresh` → WebSocket frame request → `/frame` pipeline. It shows Processing, then only an option letter/number and matching answer. The red Disconnect icon stops tracks, cancels requests, ends the session, clears the answer and closes the floating window.
 6. Change the Edge practice question and tap Refresh again. No frames are extracted between taps. Suggestions correspond to the requested frame; the app does not watch subsequent screen changes.
@@ -34,7 +34,7 @@ If ALLOWED_ASSESSMENT_ORIGINS is configured, its existing capture-handle policy 
 ## Required real Chrome + Edge acceptance (not performed here)
 
 - Record Chrome/Edge and OS versions, approved provider/model and capture authorization.
-- Check actual Document PiP support. Open its native window through the Answer Overlay click, then grant the separate native capture prompt for an authorized Edge source. Confirm the browser sharing indicator and main-page disclosure.
+- Check actual Document PiP support. Open its native window through the Start Exam click, then grant the separate native capture prompt for an authorized Edge source. Confirm the browser sharing indicator and main-page disclosure.
 - With the Java fixture visible, Refresh should produce **B — James Gosling**. Advance to HTML, then Refresh; the previous result must clear while Processing appears, then **A — HyperText Markup Language**. Test numeric labels and long wrapping answers.
 - Inspect the main page network panel: zero `/frame` calls while idle; one per accepted Refresh. No microphone access, audio track, MediaRecorder, screenshot disk writes or continuous uploads.
 - Reject capture, revoke permission, close PiP during analysis, navigate the main page, close Chrome, interrupt networking and let the 60-minute session expire. Confirm tracks release and no old response restores an answer. A new permission request requires another explicit click.
