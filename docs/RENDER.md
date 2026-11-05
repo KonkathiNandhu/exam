@@ -32,6 +32,13 @@ PORT manually; the server reads Render's assigned PORT. Leave PUBLIC_API_URL
 and PUBLIC_WS_URL unset to derive them from the app origin. Leave TLS_CERT and
 TLS_KEY unset when Render terminates HTTPS.
 
+PUBLIC_APP_URL may also be left unset on Render: when RENDER=true, the server
+uses Render's automatically supplied RENDER_EXTERNAL_URL, validates it as an
+HTTPS origin, and derives the API and WSS origins from it. An explicit
+PUBLIC_APP_URL takes priority (use it for a custom domain). Render deployments
+default to cloud mode and bind to 0.0.0.0 unless BIND_HOST is explicitly set.
+Other hosting environments still require PUBLIC_APP_URL in cloud mode.
+
 Use one instance while session state is stored in memory. Restarts and deploys
 end existing sessions. Protect company use behind employee authentication.
 

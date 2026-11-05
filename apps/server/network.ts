@@ -61,7 +61,9 @@ export function networkConfig(
   env: NodeJS.ProcessEnv = process.env,
   interfaces?: Record<string, NetworkInterfaceInfo[] | undefined>,
 ): NetworkConfig {
-  const mode = env.PAIRING_MODE || "lan";
+  const onRender = env.RENDER === "true";
+  const renderOrigin = onRender ? env.RENDER_EXTERNAL_URL : undefined;
+  const mode = env.PAIRING_MODE || (onRender ? "cloud" : "lan");
   if (!["lan", "cloud"].includes(mode))
     throw Error("PAIRING_MODE must be lan or cloud");
   const port = Number(env.PORT || 3000);
@@ -116,10 +118,12 @@ export function networkConfig(
     apiOrigin = "",
     wsOrigin = "";
   try {
-    const app = env.PUBLIC_APP_URL || env.PUBLIC_ORIGIN;
-    if (mode === "cloud" && !env.PUBLIC_APP_URL)
+    const app =
+      env.PUBLIC_APP_URL ||
+      (mode === "cloud" ? renderOrigin : env.PUBLIC_ORIGIN || renderOrigin);
+    if (mode === "cloud" && !app)
       throw Error(
-        "Cloud mode requires an explicit PUBLIC_APP_URL HTTPS origin",
+        "Cloud mode requires a PUBLIC_APP_URL HTTPS origin or Render's RENDER_EXTERNAL_URL",
       );
     if (!app && !selectedLanIP)
       throw Error(
@@ -167,7 +171,8 @@ export function networkConfig(
       );
   }
   const bindHost =
-    env.BIND_HOST || (env.LAN_ENABLED === "true" ? "0.0.0.0" : "127.0.0.1");
+    env.BIND_HOST ||
+    (env.LAN_ENABLED === "true" || onRender ? "0.0.0.0" : "127.0.0.1");
   return {
     mode: mode as "lan" | "cloud",
     appOrigin,

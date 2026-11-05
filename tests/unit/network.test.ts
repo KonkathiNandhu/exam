@@ -112,3 +112,62 @@ test("localhost preview is explicitly loopback-only and cannot be combined with 
       networkConfig({ LOCAL_PAIRING_PREVIEW: "true", ...other }, single),
     );
 });
+test("Render metadata supplies the real HTTPS app origin, API, WSS and reachable binding", () => {
+  const c = networkConfig(
+    {
+      RENDER: "true",
+      RENDER_EXTERNAL_URL: "https://assigned-service.onrender.com",
+      PORT: "10000",
+    },
+    {},
+  );
+  assert.equal(c.mode, "cloud");
+  assert.equal(c.appOrigin, "https://assigned-service.onrender.com");
+  assert.equal(c.apiOrigin, c.appOrigin);
+  assert.equal(c.wsOrigin, "wss://assigned-service.onrender.com");
+  assert.equal(c.bindHost, "0.0.0.0");
+  assert.equal(c.port, 10000);
+  assert.ok(c.allowedOrigins.includes(c.appOrigin));
+});
+test("explicit custom domain and binding override Render defaults", () => {
+  const c = networkConfig(
+    {
+      RENDER: "true",
+      RENDER_EXTERNAL_URL: "https://assigned-service.onrender.com",
+      PUBLIC_APP_URL: "https://training.example.test",
+      BIND_HOST: "127.0.0.1",
+    },
+    {},
+  );
+  assert.equal(c.appOrigin, "https://training.example.test");
+  assert.equal(c.bindHost, "127.0.0.1");
+});
+test("Render URL fallback preserves HTTPS and remote-origin checks", () => {
+  for (const url of [
+    "http://assigned-service.onrender.com",
+    "https://localhost:3000",
+    "https://service.onrender.com/path",
+  ])
+    assert.throws(() =>
+      networkConfig({ RENDER: "true", RENDER_EXTERNAL_URL: url }, {}),
+    );
+  assert.throws(() =>
+    networkConfig(
+      {
+        PAIRING_MODE: "cloud",
+        RENDER_EXTERNAL_URL: "https://assigned-service.onrender.com",
+      },
+      {},
+    ),
+  );
+  assert.throws(() =>
+    networkConfig(
+      {
+        RENDER: "true",
+        RENDER_EXTERNAL_URL: "https://assigned-service.onrender.com",
+        PUBLIC_APP_URL: "http://localhost:3000",
+      },
+      {},
+    ),
+  );
+});
