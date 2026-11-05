@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.env
+*.pem
+test-results/
+playwright-report/
+
+# Local credentials, certificates, and OS metadata
+.env.*
+!.env.example
+*.key
+*.p12
+*.pfx
+.DS_Store

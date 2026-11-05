@@ -1,0 +1,13 @@
+# Include inside an HTTPS server configured with a trusted certificate.
+# Configure PUBLIC_APP_URL to the public HTTPS URL, not the internal upstream.
+client_max_body_size 2m;
+location / {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header Origin $http_origin;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 75s;
+    proxy_send_timeout 75s;
+}

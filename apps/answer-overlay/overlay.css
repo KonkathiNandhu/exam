@@ -1,0 +1,87 @@
+.overlay-launcher {
+  max-width: 900px;
+}
+.overlay-launcher header {
+  max-width: none;
+}
+.overlay-launcher .card {
+  margin-top: 30px;
+}
+.overlay-document {
+  margin: 0;
+  background: white;
+  color: #202c28;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+.floating-answer {
+  min-height: 100dvh;
+  padding: 18px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  box-sizing: border-box;
+  background: #fff;
+}
+.floating-result {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  text-align: center;
+  min-height: 110px;
+  overflow-wrap: anywhere;
+}
+.floating-option {
+  font-size: 54px;
+  font-weight: 750;
+  line-height: 1.2;
+  color: #24864f;
+}
+.floating-text {
+  font-size: 21px;
+  line-height: 1.35;
+  font-weight: 650;
+  margin-top: 12px;
+  max-width: 100%;
+}
+.floating-result p {
+  font-size: 15px;
+  line-height: 1.5;
+  color: #68766c;
+  margin: 0;
+}
+.floating-controls {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.floating-controls button {
+  width: 64px;
+  height: 64px;
+  min-width: 64px;
+  min-height: 64px;
+  border-radius: 50%;
+  padding: 18px;
+  display: grid;
+  place-items: center;
+}
+.floating-controls svg {
+  width: 28px;
+  height: 28px;
+}
+.floating-refresh {
+  color: #24864f;
+  border-color: #cbe6d3;
+  background: #f0f9f3;
+}
+.floating-disconnect {
+  color: #d04747;
+  border-color: #f0d2d2;
+  background: #fff5f5;
+}
+.floating-controls button:focus-visible {
+  outline: 3px solid currentColor;
+  outline-offset: 3px;
+}
