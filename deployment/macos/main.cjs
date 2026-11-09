@@ -97,19 +97,24 @@ async function openOverlay() {
 
     choosingSource = true;
     let source;
+    let failure;
     try {
       source = await chooseWindow(host);
     } catch (error) {
-      if (!host.isDestroyed())
-        dialog.showErrorBox("Could not share a window", error.message);
+      failure = error;
     } finally {
       choosingSource = false;
     }
-    callback(
-      source && !contents.isDestroyed() && request.frame === contents.mainFrame
-        ? { video: source }
-        : null,
-    );
+    if (contents.isDestroyed() || request.frame !== contents.mainFrame) return;
+    callback(source ? { video: source } : null);
+    if (failure && !host.isDestroyed()) {
+      host.focus();
+      await dialog.showMessageBox(host, {
+        type: "warning",
+        message: "Could not share a window",
+        detail: failure.message,
+      });
+    }
   });
 
   contents.setWindowOpenHandler(() => ({ action: "deny" }));
@@ -123,10 +128,27 @@ async function openOverlay() {
 }
 
 async function chooseWindow(host) {
-  const sources = await desktopCapturer.getSources({
-    types: ["window"],
-    thumbnailSize: { width: 0, height: 0 },
-  });
+  let timer;
+  let sources;
+  try {
+    sources = await Promise.race([
+      desktopCapturer.getSources({
+        types: ["window"],
+        thumbnailSize: { width: 0, height: 0 },
+      }),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          reject(
+            Error(
+              "macOS did not return the window list. If you just enabled screen access, quit Answer Overlay and reopen it before trying again.",
+            ),
+          );
+        }, 10000);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
   if (host.isDestroyed()) return;
   if (systemPreferences.getMediaAccessStatus("screen") !== "granted") {
     throw Error(
@@ -146,6 +168,7 @@ async function chooseWindow(host) {
 
   const buttons = windows.map(({ name }) => name.replace(/\s+/g, " ").trim());
   const cancelId = buttons.length;
+  host.focus();
   const { response } = await dialog.showMessageBox(host, {
     title: "Share a window",
     message: "Choose the browser window with the quiz",
@@ -153,6 +176,7 @@ async function chooseWindow(host) {
     buttons: [...buttons, "Cancel"],
     defaultId: cancelId,
     cancelId,
+    signal: AbortSignal.timeout(60000),
   });
   return windows[response];
 }
