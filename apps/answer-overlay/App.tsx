@@ -45,6 +45,7 @@ export default function AnswerOverlay() {
     frame: null,
   });
   const refreshLock = useRef(false);
+  const retrySharper = useRef(false);
   const { snapshot, connected, connectionError } = useSession(
     credentials,
     "desktop",
@@ -78,6 +79,7 @@ export default function AnswerOverlay() {
       state.video = null;
     }
     refreshLock.current = false;
+    retrySharper.current = false;
   }
   function endSession(closeWindow: boolean, status = "Disconnected") {
     const state = owner.current;
@@ -159,6 +161,7 @@ export default function AnswerOverlay() {
       return;
     setBusy(false);
     refreshLock.current = false;
+    retrySharper.current = snapshot.state === "CAPTURING" && !snapshot.answer;
     if (snapshot.answer?.status === "answered") setMessage("");
     else if (snapshot.answer?.status === "uncertain") setMessage("Uncertain");
     else {
@@ -333,13 +336,43 @@ export default function AnswerOverlay() {
       const canvas = document.createElement("canvas");
       let frame: string;
       try {
-        const scale = Math.min(1, 1600 / v.videoWidth);
-        canvas.width = Math.round(v.videoWidth * scale);
-        canvas.height = Math.round(v.videoHeight * scale);
-        canvas
-          .getContext("2d")!
-          .drawImage(v, 0, 0, canvas.width, canvas.height);
+        const drawFrame = (maxEdge: number) => {
+          const scale = Math.min(
+            1,
+            maxEdge / Math.max(v.videoWidth, v.videoHeight),
+          );
+          canvas.width = Math.max(1, Math.round(v.videoWidth * scale));
+          canvas.height = Math.max(1, Math.round(v.videoHeight * scale));
+          canvas
+            .getContext("2d")!
+            .drawImage(v, 0, 0, canvas.width, canvas.height);
+        };
+        drawFrame(retrySharper.current ? 2560 : 1600);
+
+        const sample = document.createElement("canvas");
+        sample.width = sample.height = 32;
+        const sampleContext = sample.getContext("2d")!;
+        sampleContext.drawImage(canvas, 0, 0, 32, 32);
+        const { data } = sampleContext.getImageData(0, 0, 32, 32);
+        if (
+          !data.some(
+            (value, i) => i % 4 !== 3 && Math.abs(value - data[i % 4]) > 3,
+          )
+        ) {
+          throw Error(
+            "The shared frame is blank. Disconnect and select the quiz window in Ask Permission.",
+          );
+        }
+
         frame = canvas.toDataURL("image/jpeg", 0.82);
+        if (frame.length > 1_750_000) {
+          drawFrame(1600);
+          frame = canvas.toDataURL("image/jpeg", 0.65);
+        }
+        if (frame.length > 1_750_000)
+          throw Error(
+            "The frame is too large. Share just the quiz window and try again.",
+          );
       } finally {
         canvas.width = 0;
         canvas.height = 0;

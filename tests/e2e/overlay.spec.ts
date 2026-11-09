@@ -1,9 +1,9 @@
 import { test, expect, type Page } from "@playwright/test";
 // These tests explicitly simulate PiP with an iframe and screen permission with
 // a canvas MediaStream. They do not establish native window stacking or capture.
-async function installFixture(page: Page, deny = false) {
+async function installFixture(page: Page, deny = false, blank = false) {
   await page.addInitScript(
-    ({ deny }) => {
+    ({ deny, blank }) => {
       Object.defineProperty(window, "documentPictureInPicture", {
         configurable: true,
         value: {
@@ -37,13 +37,13 @@ async function installFixture(page: Page, deny = false) {
         ctx.fillRect(0, 0, 1280, 720);
         ctx.fillStyle = "black";
         ctx.font = "30px sans-serif";
-        ctx.fillText("Authorized fixture", 30, 80);
+        if (!blank) ctx.fillText("Authorized fixture", 30, 80);
         const stream = canvas.captureStream(1);
         (window as any).testStream = stream;
         return stream;
       };
     },
-    { deny },
+    { deny, blank },
   );
 }
 async function open(page: Page, deny = false) {
@@ -260,4 +260,23 @@ test("compact launcher authorizes and controls capture in one window", async ({
   await stopped(page);
   await expect(page.getByRole("status")).toHaveText("Disconnected");
   await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
+test("blank screen captures are reported without uploading a frame", async ({
+  page,
+}) => {
+  let uploads = 0;
+  page.on("request", (request) => {
+    if (request.url().endsWith("/frame")) uploads++;
+  });
+  await installFixture(page, false, true);
+  await page.goto("/overlay");
+  await page.getByRole("button", { name: "Start Exam" }).click();
+  await page.getByRole("checkbox").check();
+  await page.getByRole("button", { name: "Ask Permission" }).click();
+  await page.getByRole("button", { name: "Refresh" }).click();
+  await expect(page.getByRole("alert")).toContainText(
+    "The shared frame is blank",
+  );
+  expect(uploads).toBe(0);
 });
