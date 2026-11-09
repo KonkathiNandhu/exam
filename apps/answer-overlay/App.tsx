@@ -2,6 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { api, apiURL, config, useSession, type Credentials } from "../client";
 import "./overlay.css";
+import type { AccessibleQuestion } from "../../packages/shared";
+
+type EdgeReader = {
+  select(): Promise<{ title: string }>;
+  read(): Promise<AccessibleQuestion>;
+  disconnect(): Promise<void>;
+};
 
 type PictureInPictureAPI = {
   requestWindow(options: { width: number; height: number }): Promise<Window>;
@@ -12,6 +19,10 @@ function pipAPI(): PictureInPictureAPI | undefined {
 }
 export default function AnswerOverlay() {
   const compact = new URLSearchParams(location.search).get("window") !== "pip";
+  const edgeReader = compact
+    ? (window as Window & { edgeReader?: EdgeReader }).edgeReader
+    : undefined;
+  const [sourceTitle, setSourceTitle] = useState("");
   const [examStarted, setExamStarted] = useState(false);
   const [pip, setPip] = useState<Window | null>(null);
   const [mount, setMount] = useState<HTMLElement | null>(null);
@@ -22,9 +33,11 @@ export default function AnswerOverlay() {
   const [opening, setOpening] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(
-    compact
-      ? "Authorize screen sharing to begin."
-      : "Open Answer Overlay, then authorize capture on this page.",
+    edgeReader
+      ? "Select the Edge window to begin."
+      : compact
+        ? "Authorize screen sharing to begin."
+        : "Open Answer Overlay, then authorize capture on this page.",
   );
   const [notice, setNotice] = useState("");
   const [requestId, setRequestId] = useState<string | null>(null);
@@ -47,6 +60,11 @@ export default function AnswerOverlay() {
   const refreshLock = useRef(false);
   const retrySharper = useRef(false);
   const capturedFrame = useRef<{ id: string; jpeg: string } | null>(null);
+  const submittedText = useRef<{
+    id: string;
+    input: AccessibleQuestion;
+  } | null>(null);
+  const [validatedTextId, setValidatedTextId] = useState<string | null>(null);
   const { snapshot, connected, connectionError } = useSession(
     credentials,
     "desktop",
@@ -61,6 +79,7 @@ export default function AnswerOverlay() {
     connected &&
     active &&
     !busy &&
+    (!edgeReader || validatedTextId === requestId) &&
     requestId &&
     snapshot?.requestId === requestId &&
     snapshot.answer?.status === "answered"
@@ -93,6 +112,10 @@ export default function AnswerOverlay() {
     refreshLock.current = false;
     retrySharper.current = false;
     capturedFrame.current = null;
+    submittedText.current = null;
+    setValidatedTextId(null);
+    if (edgeReader) void edgeReader.disconnect().catch(() => {});
+    setSourceTitle("");
   }
   function endSession(closeWindow: boolean, status = "Disconnected") {
     const state = owner.current;
@@ -172,6 +195,49 @@ export default function AnswerOverlay() {
       snapshot.state === "PROCESSING"
     )
       return;
+    if (edgeReader && snapshot.answer) {
+      let cancelled = false;
+      const expected = submittedText.current;
+      void edgeReader
+        .read()
+        .then((current) => {
+          if (cancelled) return;
+          if (
+            expected?.id !== requestId ||
+            JSON.stringify(current) !== JSON.stringify(expected.input)
+          ) {
+            setRequestId(null);
+            setMessage("Question changed");
+            setNotice(
+              "The selected page changed while processing. Refresh the current question.",
+            );
+          } else {
+            setValidatedTextId(requestId);
+            setMessage(
+              snapshot.answer?.status === "answered" ? "" : "Uncertain",
+            );
+          }
+        })
+        .catch((error) => {
+          if (cancelled) return;
+          setRequestId(null);
+          setMessage("Unable to read");
+          setNotice(
+            error instanceof Error
+              ? error.message
+              : "Could not verify the current question.",
+          );
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setBusy(false);
+            refreshLock.current = false;
+          }
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
     setBusy(false);
     refreshLock.current = false;
     retrySharper.current = snapshot.state === "CAPTURING" && !snapshot.answer;
@@ -246,6 +312,10 @@ export default function AnswerOverlay() {
     }
   }
   async function startCapture() {
+    if (edgeReader) {
+      await startAccessibleReading();
+      return;
+    }
     if (!consent || (!compact && !owner.current.pip) || starting || sharing)
       return;
     setStarting(true);
@@ -335,6 +405,58 @@ export default function AnswerOverlay() {
       setStarting(false);
     }
   }
+  async function startAccessibleReading() {
+    if (!edgeReader || !consent || starting || sharing) return;
+    const state = owner.current;
+    const epoch = state.epoch;
+    setStarting(true);
+    setNotice("");
+    let c: Credentials | null = null;
+    try {
+      const response = await fetch(apiURL("config"), {
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!response.ok) throw Error("Cannot load access policy.");
+      const policy = await response.json();
+      if (!policy.accessibilityInput)
+        throw Error(
+          "Deploy the latest server version to enable Edge text reading.",
+        );
+      if (policy.allowedAssessmentOrigins.length)
+        throw Error(
+          "This server requires verified assessment origins. Edge text reading is unavailable under that policy.",
+        );
+      if (state.epoch !== epoch) return;
+      const source = await edgeReader.select();
+      if (state.epoch !== epoch) return;
+      c = await api("sessions", {});
+      if (state.epoch !== epoch) {
+        void api(`sessions/${c!.id}/disconnect`, {}, c!).catch(() => {});
+        return;
+      }
+      state.credentials = c;
+      setCredentials(c);
+      await api(`sessions/${c!.id}/capture`, {}, c!);
+      if (state.epoch !== epoch) return;
+      setSourceTitle(source.title);
+      setSharing(true);
+      setMessage("Ready");
+    } catch (error) {
+      if (c) void api(`sessions/${c.id}/disconnect`, {}, c).catch(() => {});
+      if (state.epoch === epoch) {
+        state.credentials = null;
+        release();
+        setCredentials(null);
+        setSharing(false);
+        setMessage("Not connected");
+        setNotice(
+          error instanceof Error ? error.message : "Could not read Edge.",
+        );
+      }
+    } finally {
+      if (state.epoch === epoch) setStarting(false);
+    }
+  }
   async function captureOne(id: string) {
     const state = owner.current;
     const c = state.credentials;
@@ -342,6 +464,30 @@ export default function AnswerOverlay() {
     const epoch = state.epoch;
     if (!c) return;
     try {
+      if (edgeReader) {
+        const accessibility = await edgeReader.read();
+        if (state.epoch !== epoch) return;
+        submittedText.current = { id, input: accessibility };
+        const controller = new AbortController();
+        state.frame = controller;
+        const response = await fetch(apiURL(`sessions/${c.id}/frame`), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + c.token,
+          },
+          body: JSON.stringify({ accessibility, requestId: id }),
+          signal: AbortSignal.any([
+            controller.signal,
+            AbortSignal.timeout(60000),
+          ]),
+        });
+        if (!response.ok)
+          throw Error(
+            `The server rejected the question (HTTP ${response.status}).`,
+          );
+        return;
+      }
       const track = state.stream?.getVideoTracks()[0];
       if (!track || track.readyState !== "live" || !v?.videoWidth)
         throw Error(
@@ -460,6 +606,8 @@ export default function AnswerOverlay() {
     const epoch = owner.current.epoch;
     refreshLock.current = true;
     capturedFrame.current = null;
+    submittedText.current = null;
+    setValidatedTextId(null);
     setBusy(true);
     setRequestId(null);
     setMessage("Processing");
@@ -530,19 +678,25 @@ export default function AnswerOverlay() {
               checked={consent}
               onChange={(event) => setConsent(event.target.checked)}
             />
-            I am authorized to share this screen.
+            {edgeReader
+              ? "I am authorized to read this quiz and use AI assistance."
+              : "I am authorized to share this screen."}
           </label>
           <button disabled={!consent || starting} onClick={startCapture}>
-            Ask Permission
+            {edgeReader ? "Select Edge window" : "Ask Permission"}
           </button>
           <small>
-            Select the browser window with the quiz in the sharing picker.
+            {edgeReader
+              ? "Reads visible text and choices only when you refresh."
+              : "Select the browser window with the quiz in the sharing picker."}
           </small>
         </div>
       )}
       {compact && sharing && (
         <p className="compact-sharing">
-          Screen sharing is active
+          {edgeReader
+            ? `Connected to ${sourceTitle}`
+            : "Screen sharing is active"}
           {owner.current.stream?.getVideoTracks()[0]?.label && (
             <>
               <br />

@@ -11,6 +11,18 @@ let frames = 0;
 let scenario = "default";
 const { app } = await buildApp(
   {
+    extractText: async (input) => {
+      await new Promise((r) => setTimeout(r, 350));
+      return identify({
+        question: input.text,
+        options: Object.fromEntries(
+          input.choices.map((choice, index) => [
+            String.fromCharCode(65 + index),
+            choice,
+          ]),
+        ),
+      });
+    },
     extract: async () => {
       await new Promise((r) => setTimeout(r, 350));
       if (scenario === "unreadable") return null;

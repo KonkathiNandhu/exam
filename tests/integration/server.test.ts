@@ -389,3 +389,56 @@ test("single-use Refresh gates frames, clears old answers, and enforces matching
     await app.close();
   }
 });
+
+test("accessible text reuses authenticated single-use refresh and exact answer mapping", async () => {
+  let calls = 0;
+  const { app, sessions, post, c, analyze } = await setup({
+    ...ai,
+    extractText: async () => {
+      calls++;
+      return q;
+    },
+  });
+  try {
+    const payload = {
+      accessibility: { text: q.question, choices: Object.values(q.options) },
+    };
+    assert.equal((await analyze(payload)).statusCode, 409);
+    await post(`/api/sessions/${c.id}/capture`, {}, c.token);
+    assert.equal((await analyze(payload)).statusCode, 200);
+    assert.equal(calls, 1);
+    assert.equal(sessions.get(c.id)!.view.answer?.answer, "James Gosling");
+    const requestId = sessions.get(c.id)!.view.requestId;
+    assert.equal(
+      (
+        await post(
+          `/api/sessions/${c.id}/frame`,
+          { ...payload, requestId },
+          c.token,
+        )
+      ).statusCode,
+      409,
+    );
+    assert.equal(
+      (
+        await post(
+          `/api/sessions/${c.id}/frame`,
+          { ...payload, requestId },
+          "bad",
+        )
+      ).statusCode,
+      401,
+    );
+    assert.equal(calls, 1);
+    assert.equal(
+      (
+        await analyze({
+          accessibility: { text: "Incomplete question", choices: ["Only one"] },
+        })
+      ).statusCode,
+      400,
+    );
+  } finally {
+    await app.close();
+  }
+});

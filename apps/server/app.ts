@@ -4,6 +4,7 @@ import Fastify from "fastify";
 import websocket from "@fastify/websocket";
 import rateLimit from "@fastify/rate-limit";
 import { z } from "zod";
+import { accessibleQuestionSchema } from "../../packages/shared/index";
 import { Session, same, secret } from "../../packages/session-manager/index";
 import {
   Provider,
@@ -91,6 +92,7 @@ export async function buildApp(
   );
   app.get("/api/config", async () => ({
     allowedAssessmentOrigins,
+    accessibilityInput: typeof ai.extractText === "function",
     ...publicConfig,
   }));
   app.get("/api/health", async () => ({ ok: true }));
@@ -278,14 +280,30 @@ export async function buildApp(
     if (!a.desktop || !s.view.captureActive)
       return reply.code(403).send({ error: "Capture not authorized" });
     const b = z
-      .object({
-        frame: z
-          .string()
-          .max(1750000)
-          .regex(/^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/),
-        requestId: z.string().min(1).max(100),
-      })
+      .union([
+        z.object({
+          frame: z
+            .string()
+            .max(1750000)
+            .regex(/^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/),
+          requestId: z.string().min(1).max(100),
+        }),
+        z
+          .object({
+            accessibility: accessibleQuestionSchema,
+            requestId: z.string().min(1).max(100),
+          })
+          .strict(),
+      ])
       .parse(req.body);
+    if (
+      "accessibility" in b &&
+      (!ai.extractText || allowedAssessmentOrigins.length)
+    )
+      return reply.code(403).send({
+        error:
+          "Accessible text is unavailable under this server's capture policy.",
+      });
     if (s.frameRequest !== b.requestId)
       return reply
         .code(409)
@@ -300,7 +318,10 @@ export async function buildApp(
     s.view.message = "Reading the authorized screen…";
     s.emit();
     try {
-      const q = await ai.extract(b.frame, controller.signal);
+      const q =
+        "accessibility" in b
+          ? await ai.extractText!(b.accessibility, controller.signal)
+          : await ai.extract(b.frame, controller.signal);
       if (!s.active() || s.generation !== generation) return { obsolete: true };
       if (!q) {
         s.view.state = "CAPTURING";

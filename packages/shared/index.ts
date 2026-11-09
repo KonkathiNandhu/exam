@@ -1,4 +1,11 @@
 import { z } from "zod";
+export const accessibleQuestionSchema = z
+  .object({
+    text: z.string().trim().min(5).max(24000),
+    choices: z.array(z.string().trim().min(1).max(3000)).min(2).max(8),
+  })
+  .strict();
+export type AccessibleQuestion = z.infer<typeof accessibleQuestionSchema>;
 export const questionSchema = z
   .object({
     question: z.string().trim().min(5).max(6000),
