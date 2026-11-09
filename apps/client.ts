@@ -60,6 +60,7 @@ export function useSession(
   useEffect(() => {
     set(null);
     connection(false);
+    setError("");
     if (!c) return;
     let disposed = false;
     let ws: WebSocket;
@@ -87,7 +88,9 @@ export function useSession(
           refreshHandler.current?.(b.requestId);
       };
       ws.onclose = (e) => {
+        if (disposed) return;
         connection(false);
+        if (ended) return;
         setError(
           e.code === 1008
             ? "Session unauthorized, already disconnected, or expired. Pair again."
@@ -97,7 +100,7 @@ export function useSession(
           ended = true;
           sessionStorage.removeItem(role);
         }
-        if (!disposed && !ended && attempts < 6)
+        if (!ended && attempts < 6)
           timer = setTimeout(open, Math.min(1000 * 2 ** attempts++, 8000));
       };
     };

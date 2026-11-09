@@ -259,4 +259,5 @@ test("compact launcher authorizes and controls capture in one window", async ({
   await page.getByRole("button", { name: "Disconnect" }).click();
   await stopped(page);
   await expect(page.getByRole("status")).toHaveText("Disconnected");
+  await expect(page.getByRole("alert")).toHaveCount(0);
 });

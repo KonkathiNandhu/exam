@@ -110,6 +110,19 @@ test("unreadable vision output returns no question", async () => {
   p.call = async () => ({ visible: false });
   assert.equal(await p.extract("fixture", new AbortController().signal), null);
 });
+test("vision extraction labels unlabeled radio choices in reading order", async () => {
+  const p = new Provider();
+  p.call = async () => ({
+    question: "Which declaration uses a floating-point value?",
+    options: ["float x = 2.8f;", "int x = 2.8f;", "byte x = 2.8f;"],
+  });
+  const question = await p.extract("fixture", new AbortController().signal);
+  assert.deepEqual(question?.options, {
+    A: "float x = 2.8f;",
+    B: "int x = 2.8f;",
+    C: "byte x = 2.8f;",
+  });
+});
 test("credential comparisons safely reject non-ASCII attacker input", () => {
   const s = new Session();
   assert.equal(s.auth("é".repeat(s.desktopToken.length), "desktop"), false);
