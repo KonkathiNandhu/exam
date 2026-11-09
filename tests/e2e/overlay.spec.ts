@@ -229,6 +229,7 @@ test("unreadable and uncertain results never invent an answer", async ({
 
 test("compact launcher authorizes and controls capture in one window", async ({
   page,
+  request,
 }) => {
   await installFixture(page);
   await page.goto("/overlay");
@@ -241,6 +242,18 @@ test("compact launcher authorizes and controls capture in one window", async ({
   await page.getByRole("button", { name: "Ask Permission" }).click();
   await expect(page.getByText("Screen sharing is active")).toBeVisible();
   await expect(page.locator("#test-pip")).toHaveCount(0);
+  await request.post("/test/reset", {
+    headers: { origin: "http://localhost:3000" },
+    data: { scenario: "unreadable" },
+  });
+  await page.getByRole("button", { name: "Refresh" }).click();
+  await expect(page.getByRole("alert")).toContainText(
+    "Keep the question and choices visible",
+  );
+  await request.post("/test/reset", {
+    headers: { origin: "http://localhost:3000" },
+    data: {},
+  });
   await page.getByRole("button", { name: "Refresh" }).click();
   await expect(page.locator(".floating-option")).toHaveText("B");
   await page.getByRole("button", { name: "Disconnect" }).click();

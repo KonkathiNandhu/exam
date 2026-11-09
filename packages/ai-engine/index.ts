@@ -38,7 +38,9 @@ export class Provider implements AI {
           model,
           messages,
           response_format: { type: "json_object" },
-          temperature: 0,
+          ...(model === "gpt-5.6-luna"
+            ? { reasoning_effort: "none" }
+            : { temperature: 0 }),
         }),
         signal: AbortSignal.any([signal, AbortSignal.timeout(25000)]),
       });
@@ -89,7 +91,7 @@ export class Provider implements AI {
           ],
         },
       ],
-      process.env.AI_VISION_MODEL || "gpt-4.1-mini",
+      process.env.AI_VISION_MODEL || "gpt-5.6-luna",
       signal,
     );
     if ((raw as any)?.visible === false) return null;
@@ -105,7 +107,7 @@ export class Provider implements AI {
         },
         { role: "user", content: JSON.stringify(q) },
       ],
-      process.env.AI_ANSWER_MODEL || "gpt-4.1-mini",
+      process.env.AI_ANSWER_MODEL || "gpt-5.6-luna",
       signal,
     );
     const a = z

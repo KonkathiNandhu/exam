@@ -11,8 +11,7 @@ function pipAPI(): PictureInPictureAPI | undefined {
     .documentPictureInPicture;
 }
 export default function AnswerOverlay() {
-  const compact =
-    new URLSearchParams(location.search).get("window") !== "pip";
+  const compact = new URLSearchParams(location.search).get("window") !== "pip";
   const [examStarted, setExamStarted] = useState(false);
   const [pip, setPip] = useState<Window | null>(null);
   const [mount, setMount] = useState<HTMLElement | null>(null);
@@ -162,10 +161,10 @@ export default function AnswerOverlay() {
     refreshLock.current = false;
     if (snapshot.answer?.status === "answered") setMessage("");
     else if (snapshot.answer?.status === "uncertain") setMessage("Uncertain");
-    else if (snapshot.state === "ERROR") {
+    else {
       setMessage("Unable to read");
       setNotice(snapshot.message);
-    } else setMessage("Unable to read");
+    }
   }, [snapshot, requestId]);
 
   async function openOverlay() {
@@ -328,7 +327,9 @@ export default function AnswerOverlay() {
         !state.stream?.getVideoTracks().some((t) => t.readyState === "live") ||
         !v?.videoWidth
       )
-        throw Error("Capture stopped");
+        throw Error(
+          "No screen frame is available. Disconnect and share the question window again.",
+        );
       const canvas = document.createElement("canvas");
       let frame: string;
       try {
@@ -358,8 +359,11 @@ export default function AnswerOverlay() {
         ]),
       });
       frame = "";
-      if (!response.ok) throw Error("Frame analysis request failed");
-    } catch {
+      if (!response.ok)
+        throw Error(
+          `The server rejected the screen frame (HTTP ${response.status}). Try Refresh again.`,
+        );
+    } catch (error) {
       if (state.epoch === epoch) {
         await api(`sessions/${c.id}/frame-error`, { requestId: id }, c).catch(
           () => {},
@@ -369,7 +373,11 @@ export default function AnswerOverlay() {
         setRequestId(null);
         setMessage("Unable to read");
         setNotice(
-          "Frame analysis failed. Check connection and backend provider settings.",
+          error instanceof TypeError
+            ? "The screen frame could not reach the server. Check your connection and try Refresh."
+            : error instanceof Error
+              ? error.message
+              : "Frame analysis failed. Try Refresh.",
         );
       }
     }

@@ -22,8 +22,8 @@ BIND_HOST=0.0.0.0
 PUBLIC_APP_URL=https://YOUR-ACTUAL-SERVICE.onrender.com
 AI_API_KEY=YOUR-SECRET-KEY
 AI_BASE_URL=https://api.openai.com/v1
-AI_VISION_MODEL=gpt-4.1-mini
-AI_ANSWER_MODEL=gpt-4.1-mini
+AI_VISION_MODEL=gpt-5.6-luna
+AI_ANSWER_MODEL=gpt-5.6-luna
 ```
 
 Replace the placeholders with the actual service origin and private key. Keep
