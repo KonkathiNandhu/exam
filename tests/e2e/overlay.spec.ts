@@ -269,10 +269,11 @@ test("compact launcher authorizes and controls capture in one window", async ({
     headers: { origin: "http://localhost:3000" },
     data: {},
   });
-  await page.getByRole("button", { name: "Refresh" }).click();
+  await page.getByText("Screen sharing is active").click();
+  await page.keyboard.press("Enter");
   await expect(page.locator(".floating-option")).toHaveText("B");
   await expect(saveFrame).toBeVisible();
-  await page.getByRole("button", { name: "Disconnect" }).click();
+  await page.keyboard.press("Backspace");
   await expect(saveFrame).toHaveCount(0);
   await stopped(page);
   await expect(page.getByRole("status")).toHaveText("Disconnected");

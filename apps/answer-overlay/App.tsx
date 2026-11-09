@@ -487,6 +487,39 @@ export default function AnswerOverlay() {
     }
     return true;
   }
+  const canRefresh =
+    sharing && connected && active && !busy && snapshot?.state !== "PROCESSING";
+  useEffect(() => {
+    const overlayWindow = compact ? window : pip;
+    if (!overlayWindow || !sharing) return;
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (
+        event.defaultPrevented ||
+        event.isComposing ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.shiftKey
+      )
+        return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest?.("input, textarea, select, [contenteditable]"))
+        return;
+      if (event.key === "Enter") {
+        if (target?.closest?.("button, a[href]")) return;
+        event.preventDefault();
+        if (!event.repeat && canRefresh) void refresh();
+      } else if (event.key === "Delete" || event.key === "Backspace") {
+        event.preventDefault();
+        if (!event.repeat) endSession(true);
+      }
+    }
+
+    overlayWindow.addEventListener("keydown", onKeyDown);
+    return () => overlayWindow.removeEventListener("keydown", onKeyDown);
+  });
+
   const controls = (
     <main className="floating-answer" aria-label="AI answer overlay">
       {compact && !sharing && (
@@ -532,13 +565,9 @@ export default function AnswerOverlay() {
         <button
           className="floating-refresh"
           aria-label="Refresh"
-          disabled={
-            !sharing ||
-            !connected ||
-            !active ||
-            busy ||
-            snapshot?.state === "PROCESSING"
-          }
+          aria-keyshortcuts="Enter"
+          title="Refresh (Enter)"
+          disabled={!canRefresh}
           onClick={refresh}
         >
           <svg
@@ -556,6 +585,8 @@ export default function AnswerOverlay() {
         <button
           className="floating-disconnect"
           aria-label="Disconnect"
+          aria-keyshortcuts="Delete Backspace"
+          title="Disconnect (Delete)"
           onClick={() => endSession(true)}
         >
           <svg
