@@ -257,7 +257,9 @@ export default function AnswerOverlay() {
     try {
       // A separate explicit gesture supplies capture activation; no asynchronous PiP call precedes it.
       selected = await navigator.mediaDevices.getDisplayMedia({
-        video: { frameRate: 1 },
+        video: compact
+          ? { frameRate: 1, displaySurface: "window" }
+          : { frameRate: 1 },
         audio: false,
       });
       if (state.epoch !== epoch || (!compact && !state.pip)) {
@@ -379,6 +381,18 @@ export default function AnswerOverlay() {
             "The shared frame is blank. Disconnect and select the quiz window in Ask Permission.",
           );
         }
+        // A window-only capture can have an opaque black background around
+        // the overlay. A few bright pixels do not make it a usable frame.
+        if (compact) {
+          let blackPixels = 0;
+          for (let i = 0; i < data.length; i += 4) {
+            if (Math.max(data[i], data[i + 1], data[i + 2]) <= 8) blackPixels++;
+          }
+          if (blackPixels >= (data.length / 4) * 0.93)
+            throw Error(
+              "The shared frame is almost entirely black. Disconnect, then select the quiz window itself in Ask Permission.",
+            );
+        }
 
         frame = canvas.toDataURL("image/jpeg", 0.82);
         if (frame.length > 1_750_000) {
@@ -488,6 +502,9 @@ export default function AnswerOverlay() {
           <button disabled={!consent || starting} onClick={startCapture}>
             Ask Permission
           </button>
+          <small>
+            Select the browser window with the quiz in the sharing picker.
+          </small>
         </div>
       )}
       {compact && sharing && (

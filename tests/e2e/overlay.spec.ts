@@ -1,7 +1,11 @@
 import { test, expect, type Page } from "@playwright/test";
 // These tests explicitly simulate PiP with an iframe and screen permission with
 // a canvas MediaStream. They do not establish native window stacking or capture.
-async function installFixture(page: Page, deny = false, blank = false) {
+async function installFixture(
+  page: Page,
+  deny = false,
+  blank: boolean | "overlay-only" = false,
+) {
   await page.addInitScript(
     ({ deny, blank }) => {
       Object.defineProperty(window, "documentPictureInPicture", {
@@ -33,11 +37,15 @@ async function installFixture(page: Page, deny = false, blank = false) {
         canvas.width = 1280;
         canvas.height = 720;
         const ctx = canvas.getContext("2d")!;
-        ctx.fillStyle = "white";
+        ctx.fillStyle = blank === "overlay-only" ? "black" : "white";
         ctx.fillRect(0, 0, 1280, 720);
         ctx.fillStyle = "black";
         ctx.font = "30px sans-serif";
         if (!blank) ctx.fillText("Authorized fixture", 30, 80);
+        if (blank === "overlay-only") {
+          ctx.fillStyle = "white";
+          ctx.fillRect(1092, 463, 180, 210);
+        }
         const stream = canvas.captureStream(1);
         (window as any).testStream = stream;
         return stream;
@@ -271,24 +279,25 @@ test("compact launcher authorizes and controls capture in one window", async ({
   await expect(page.getByRole("alert")).toHaveCount(0);
 });
 
-test("blank screen captures are reported without uploading a frame", async ({
-  page,
-}) => {
-  let uploads = 0;
-  page.on("request", (request) => {
-    if (request.url().endsWith("/frame")) uploads++;
+for (const [frame, expected] of [
+  [true, "The shared frame is blank"],
+  ["overlay-only", "The shared frame is almost entirely black"],
+] as const) {
+  test(`${expected} and does not upload a frame`, async ({ page }) => {
+    let uploads = 0;
+    page.on("request", (request) => {
+      if (request.url().endsWith("/frame")) uploads++;
+    });
+    await installFixture(page, false, frame);
+    await page.goto("/overlay");
+    await page.getByRole("button", { name: "Start Exam" }).click();
+    await page.getByRole("checkbox").check();
+    await page.getByRole("button", { name: "Ask Permission" }).click();
+    await page.getByRole("button", { name: "Refresh" }).click();
+    await expect(page.getByRole("alert")).toContainText(expected);
+    expect(uploads).toBe(0);
   });
-  await installFixture(page, false, true);
-  await page.goto("/overlay");
-  await page.getByRole("button", { name: "Start Exam" }).click();
-  await page.getByRole("checkbox").check();
-  await page.getByRole("button", { name: "Ask Permission" }).click();
-  await page.getByRole("button", { name: "Refresh" }).click();
-  await expect(page.getByRole("alert")).toContainText(
-    "The shared frame is blank",
-  );
-  expect(uploads).toBe(0);
-});
+}
 
 test("a paused share never uploads the last frame", async ({ page }) => {
   let uploads = 0;
