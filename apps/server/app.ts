@@ -1,4 +1,5 @@
 import { networkConfig, type NetworkConfig } from "./network";
+import { overlayLauncher } from "./overlay-launcher";
 import Fastify from "fastify";
 import websocket from "@fastify/websocket";
 import rateLimit from "@fastify/rate-limit";
@@ -93,6 +94,20 @@ export async function buildApp(
     ...publicConfig,
   }));
   app.get("/api/health", async () => ({ ok: true }));
+  app.get("/api/overlay-launcher", async (req, reply) => {
+    if (!network.appOrigin.startsWith("https://") || network.error) {
+      return reply
+        .code(409)
+        .send({ error: "An HTTPS app URL is required to share the launcher." });
+    }
+    return reply
+      .header(
+        "Content-Disposition",
+        'attachment; filename="Answer-Overlay.html"',
+      )
+      .type("text/html; charset=utf-8")
+      .send(overlayLauncher(network.appOrigin));
+  });
   app.post("/api/sessions", async (req, reply) => {
     const body = z
       .object({ sourceOrigin: z.string().url().optional() })

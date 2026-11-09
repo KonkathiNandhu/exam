@@ -226,3 +226,22 @@ test("unreadable and uncertain results never invent an answer", async ({
   await expect(pip.getByRole("status")).toHaveText("Uncertain");
   await expect(pip.locator(".floating-option,.floating-text")).toHaveCount(0);
 });
+
+test("compact launcher authorizes and controls capture in one window", async ({
+  page,
+}) => {
+  await installFixture(page);
+  await page.goto("/overlay?window=compact");
+  await expect(
+    page.getByRole("button", { name: "Ask Permission" }),
+  ).toBeDisabled();
+  await page.getByRole("checkbox").check();
+  await page.getByRole("button", { name: "Ask Permission" }).click();
+  await expect(page.getByText("Screen sharing is active")).toBeVisible();
+  await expect(page.locator("#test-pip")).toHaveCount(0);
+  await page.getByRole("button", { name: "Refresh" }).click();
+  await expect(page.locator(".floating-option")).toHaveText("B");
+  await page.getByRole("button", { name: "Disconnect" }).click();
+  await stopped(page);
+  await expect(page.getByRole("status")).toHaveText("Disconnected");
+});

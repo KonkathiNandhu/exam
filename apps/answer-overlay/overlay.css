@@ -85,3 +85,14 @@
   outline: 3px solid currentColor;
   outline-offset: 3px;
 }
+.compact-permission {
+  display: grid;
+  gap: 10px;
+}
+.compact-permission .consent {
+  margin: 0;
+}
+.compact-sharing {
+  margin: 0;
+  text-align: center;
+}

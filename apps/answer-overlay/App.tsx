@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { api, apiURL, useSession, type Credentials } from "../client";
+import { api, apiURL, config, useSession, type Credentials } from "../client";
 import "./overlay.css";
 
 type PictureInPictureAPI = {
@@ -11,6 +11,8 @@ function pipAPI(): PictureInPictureAPI | undefined {
     .documentPictureInPicture;
 }
 export default function AnswerOverlay() {
+  const compact =
+    new URLSearchParams(location.search).get("window") === "compact";
   const [pip, setPip] = useState<Window | null>(null);
   const [mount, setMount] = useState<HTMLElement | null>(null);
   const [credentials, setCredentials] = useState<Credentials | null>(null);
@@ -20,7 +22,9 @@ export default function AnswerOverlay() {
   const [opening, setOpening] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(
-    "Open Answer Overlay, then authorize capture on this page.",
+    compact
+      ? "Authorize screen sharing to begin."
+      : "Open Answer Overlay, then authorize capture on this page.",
   );
   const [notice, setNotice] = useState("");
   const [requestId, setRequestId] = useState<string | null>(null);
@@ -225,7 +229,8 @@ export default function AnswerOverlay() {
     }
   }
   async function startCapture() {
-    if (!consent || !owner.current.pip || starting || sharing) return;
+    if (!consent || (!compact && !owner.current.pip) || starting || sharing)
+      return;
     setStarting(true);
     setNotice("");
     const state = owner.current;
@@ -238,7 +243,7 @@ export default function AnswerOverlay() {
         video: { frameRate: 1 },
         audio: false,
       });
-      if (state.epoch !== epoch || !state.pip) {
+      if (state.epoch !== epoch || (!compact && !state.pip)) {
         selected.getTracks().forEach((t) => t.stop());
         return;
       }
@@ -263,7 +268,7 @@ export default function AnswerOverlay() {
           "This capture source is outside the configured assessment allowlist. Select an approved cooperating tab.",
         );
       c = await api("sessions", { sourceOrigin: handle?.origin });
-      if (state.epoch !== epoch || !state.pip) {
+      if (state.epoch !== epoch || (!compact && !state.pip)) {
         void api(`sessions/${c!.id}/disconnect`, {}, c!).catch(() => {});
         return;
       }
@@ -406,70 +411,87 @@ export default function AnswerOverlay() {
     }
     return true;
   }
-  const floating =
-    mount && pip
-      ? createPortal(
-          <main className="floating-answer" aria-label="AI answer overlay">
-            <section
-              className="floating-result"
-              aria-live="polite"
-              aria-busy={busy}
-            >
-              {answer ? (
-                <>
-                  <div className="floating-option">{answer.selectedOption}</div>
-                  <div className="floating-text">{answer.answer}</div>
-                </>
-              ) : (
-                <p role="status">{busy ? "Processing" : message}</p>
-              )}
-            </section>
-            <div className="floating-controls">
-              <button
-                className="floating-refresh"
-                aria-label="Refresh"
-                disabled={
-                  !sharing ||
-                  !connected ||
-                  !active ||
-                  busy ||
-                  snapshot?.state === "PROCESSING"
-                }
-                onClick={refresh}
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M20 7v5h-5M20 12a8 8 0 1 0-2 6" />
-                </svg>
-              </button>
-              <button
-                className="floating-disconnect"
-                aria-label="Disconnect"
-                onClick={() => endSession(true)}
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  aria-hidden="true"
-                >
-                  <path d="M12 3v9M7 5a8 8 0 1 0 10 0" />
-                </svg>
-              </button>
-            </div>
-          </main>,
-          mount,
-        )
-      : null;
+  const controls = (
+    <main className="floating-answer" aria-label="AI answer overlay">
+      {compact && !sharing && (
+        <div className="compact-permission">
+          <label className="consent">
+            <input
+              type="checkbox"
+              checked={consent}
+              onChange={(event) => setConsent(event.target.checked)}
+            />
+            I am authorized to share this screen.
+          </label>
+          <button disabled={!consent || starting} onClick={startCapture}>
+            Ask Permission
+          </button>
+        </div>
+      )}
+      {compact && sharing && (
+        <p className="compact-sharing">Screen sharing is active</p>
+      )}
+      <section className="floating-result" aria-live="polite" aria-busy={busy}>
+        {answer ? (
+          <>
+            <div className="floating-option">{answer.selectedOption}</div>
+            <div className="floating-text">{answer.answer}</div>
+          </>
+        ) : (
+          <p role="status">{busy ? "Processing" : message}</p>
+        )}
+      </section>
+      <div className="floating-controls">
+        <button
+          className="floating-refresh"
+          aria-label="Refresh"
+          disabled={
+            !sharing ||
+            !connected ||
+            !active ||
+            busy ||
+            snapshot?.state === "PROCESSING"
+          }
+          onClick={refresh}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M20 7v5h-5M20 12a8 8 0 1 0-2 6" />
+          </svg>
+        </button>
+        <button
+          className="floating-disconnect"
+          aria-label="Disconnect"
+          onClick={() => endSession(true)}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
+            <path d="M12 3v9M7 5a8 8 0 1 0 10 0" />
+          </svg>
+        </button>
+      </div>
+      {compact && (notice || connectionError) && (
+        <p role="alert" className="notice">
+          {notice || connectionError}
+        </p>
+      )}
+    </main>
+  );
+  if (compact) return controls;
+  const floating = mount && pip ? createPortal(controls, mount) : null;
   return (
     <>
       <main className="desktop overlay-launcher">
@@ -480,6 +502,14 @@ export default function AnswerOverlay() {
             A separate floating assistant for explicitly authorized practice.
             Your existing mobile assistant is unchanged.
           </p>
+          {config()?.appOrigin.startsWith("https://") &&
+            !config()?.configurationError && (
+              <p>
+                <a href={apiURL("overlay-launcher")}>
+                  Download single-file launcher
+                </a>
+              </p>
+            )}
           <label className="consent">
             <input
               type="checkbox"
