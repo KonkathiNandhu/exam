@@ -12,7 +12,8 @@ function pipAPI(): PictureInPictureAPI | undefined {
 }
 export default function AnswerOverlay() {
   const compact =
-    new URLSearchParams(location.search).get("window") === "compact";
+    new URLSearchParams(location.search).get("window") !== "pip";
+  const [examStarted, setExamStarted] = useState(false);
   const [pip, setPip] = useState<Window | null>(null);
   const [mount, setMount] = useState<HTMLElement | null>(null);
   const [credentials, setCredentials] = useState<Credentials | null>(null);
@@ -490,7 +491,16 @@ export default function AnswerOverlay() {
       )}
     </main>
   );
-  if (compact) return controls;
+  if (compact) {
+    if (examStarted) return controls;
+    return (
+      <main className="floating-answer" aria-label="AI answer overlay">
+        <div className="floating-result">
+          <button onClick={() => setExamStarted(true)}>Start Exam</button>
+        </div>
+      </main>
+    );
+  }
   const floating = mount && pip ? createPortal(controls, mount) : null;
   return (
     <>

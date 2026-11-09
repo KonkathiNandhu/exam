@@ -48,7 +48,7 @@ async function installFixture(page: Page, deny = false) {
 }
 async function open(page: Page, deny = false) {
   await installFixture(page, deny);
-  await page.goto("/overlay");
+  await page.goto("/overlay?window=pip");
   await expect(page.locator(".overlay-launcher > .card")).toHaveText(
     "Start ExamAsk PermissionDisconnect",
   );
@@ -92,7 +92,7 @@ test("unsupported PiP gives a clear error without a popup or capture", async ({
       value: undefined,
     }),
   );
-  await page.goto("/overlay");
+  await page.goto("/overlay?window=pip");
   await page.getByRole("checkbox").check();
   await page.getByRole("button", { name: "Start Exam", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("unavailable");
@@ -231,7 +231,9 @@ test("compact launcher authorizes and controls capture in one window", async ({
   page,
 }) => {
   await installFixture(page);
-  await page.goto("/overlay?window=compact");
+  await page.goto("/overlay");
+  await page.getByRole("button", { name: "Start Exam" }).click();
+  await expect(page.locator("#test-pip")).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Ask Permission" }),
   ).toBeDisabled();
