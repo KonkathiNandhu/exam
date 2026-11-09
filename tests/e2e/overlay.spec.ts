@@ -250,12 +250,20 @@ test("compact launcher authorizes and controls capture in one window", async ({
   await expect(page.getByRole("alert")).toContainText(
     "Keep the question and choices visible",
   );
+  const saveFrame = page.getByRole("link", { name: "Save captured frame" });
+  await expect(saveFrame).toHaveAttribute("href", /^data:image\/jpeg;base64,/);
+  const download = page.waitForEvent("download");
+  await saveFrame.click();
+  expect((await download).suggestedFilename()).toBe(
+    "answer-overlay-capture.jpg",
+  );
   await request.post("/test/reset", {
     headers: { origin: "http://localhost:3000" },
     data: {},
   });
   await page.getByRole("button", { name: "Refresh" }).click();
   await expect(page.locator(".floating-option")).toHaveText("B");
+  await expect(saveFrame).toHaveCount(0);
   await page.getByRole("button", { name: "Disconnect" }).click();
   await stopped(page);
   await expect(page.getByRole("status")).toHaveText("Disconnected");

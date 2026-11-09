@@ -46,6 +46,7 @@ export default function AnswerOverlay() {
   });
   const refreshLock = useRef(false);
   const retrySharper = useRef(false);
+  const capturedFrame = useRef<{ id: string; jpeg: string } | null>(null);
   const { snapshot, connected, connectionError } = useSession(
     credentials,
     "desktop",
@@ -65,6 +66,18 @@ export default function AnswerOverlay() {
     snapshot.answer?.status === "answered"
       ? snapshot.answer
       : null;
+  const unreadableFrame =
+    compact &&
+    sharing &&
+    connected &&
+    !busy &&
+    requestId &&
+    snapshot?.requestId === requestId &&
+    snapshot.state === "CAPTURING" &&
+    !snapshot.answer &&
+    capturedFrame.current?.id === requestId
+      ? capturedFrame.current
+      : null;
 
   function release() {
     const state = owner.current;
@@ -80,6 +93,7 @@ export default function AnswerOverlay() {
     }
     refreshLock.current = false;
     retrySharper.current = false;
+    capturedFrame.current = null;
   }
   function endSession(closeWindow: boolean, status = "Disconnected") {
     const state = owner.current;
@@ -162,6 +176,7 @@ export default function AnswerOverlay() {
     setBusy(false);
     refreshLock.current = false;
     retrySharper.current = snapshot.state === "CAPTURING" && !snapshot.answer;
+    if (!retrySharper.current) capturedFrame.current = null;
     if (snapshot.answer?.status === "answered") setMessage("");
     else if (snapshot.answer?.status === "uncertain") setMessage("Uncertain");
     else {
@@ -378,6 +393,7 @@ export default function AnswerOverlay() {
         canvas.height = 0;
       }
       const controller = new AbortController();
+      if (compact) capturedFrame.current = { id, jpeg: frame };
       state.frame = controller;
       const response = await fetch(apiURL(`sessions/${c.id}/frame`), {
         method: "POST",
@@ -398,9 +414,11 @@ export default function AnswerOverlay() {
         );
     } catch (error) {
       if (state.epoch === epoch) {
+        if (capturedFrame.current?.id === id) capturedFrame.current = null;
         await api(`sessions/${c.id}/frame-error`, { requestId: id }, c).catch(
           () => {},
         );
+        if (state.epoch !== epoch) return;
         setBusy(false);
         refreshLock.current = false;
         setRequestId(null);
@@ -426,6 +444,7 @@ export default function AnswerOverlay() {
       return;
     const epoch = owner.current.epoch;
     refreshLock.current = true;
+    capturedFrame.current = null;
     setBusy(true);
     setRequestId(null);
     setMessage("Processing");
@@ -528,6 +547,17 @@ export default function AnswerOverlay() {
       {compact && (notice || connectionError) && (
         <p role="alert" className="notice">
           {notice || connectionError}
+          {unreadableFrame && (
+            <>
+              <br />
+              <a
+                href={unreadableFrame.jpeg}
+                download="answer-overlay-capture.jpg"
+              >
+                Save captured frame
+              </a>
+            </>
+          )}
         </p>
       )}
     </main>
