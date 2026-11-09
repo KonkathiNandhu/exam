@@ -111,8 +111,8 @@ async function openOverlay() {
       host.focus();
       await dialog.showMessageBox(host, {
         type: "warning",
-        message: "Could not share a window",
-        detail: failure.message,
+        title: "Could not share a window",
+        message: failure instanceof Error ? failure.message : String(failure),
       });
     }
   });
@@ -128,6 +128,11 @@ async function openOverlay() {
 }
 
 async function chooseWindow(host) {
+  const permissionMessage =
+    "Allow this copy of Answer Overlay in System Settings → Privacy & Security → Screen & System Audio Recording, then quit and reopen it.";
+  const access = systemPreferences.getMediaAccessStatus("screen");
+  if (access === "denied" || access === "restricted")
+    throw Error(permissionMessage);
   let timer;
   let sources;
   try {
@@ -146,15 +151,17 @@ async function chooseWindow(host) {
         }, 10000);
       }),
     ]);
+  } catch (error) {
+    if (systemPreferences.getMediaAccessStatus("screen") !== "granted")
+      throw Error(permissionMessage);
+    const reason = error instanceof Error ? error.message : String(error);
+    throw Error(`Could not load the macOS window list. ${reason}`);
   } finally {
     clearTimeout(timer);
   }
   if (host.isDestroyed()) return;
-  if (systemPreferences.getMediaAccessStatus("screen") !== "granted") {
-    throw Error(
-      "Allow Answer Overlay in System Settings → Privacy & Security → Screen & System Audio Recording, then quit and reopen the app.",
-    );
-  }
+  if (systemPreferences.getMediaAccessStatus("screen") !== "granted")
+    throw Error(permissionMessage);
 
   const ownWindowId = host.getMediaSourceId().split(":")[1];
   const windows = sources.filter(
