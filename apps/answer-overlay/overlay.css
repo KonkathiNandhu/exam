@@ -95,4 +95,9 @@
 .compact-sharing {
   margin: 0;
   text-align: center;
+  overflow-wrap: anywhere;
+}
+.compact-diagnostics {
+  text-align: center;
+  font-size: 13px;
 }

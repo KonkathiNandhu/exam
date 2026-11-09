@@ -263,8 +263,9 @@ test("compact launcher authorizes and controls capture in one window", async ({
   });
   await page.getByRole("button", { name: "Refresh" }).click();
   await expect(page.locator(".floating-option")).toHaveText("B");
-  await expect(saveFrame).toHaveCount(0);
+  await expect(saveFrame).toBeVisible();
   await page.getByRole("button", { name: "Disconnect" }).click();
+  await expect(saveFrame).toHaveCount(0);
   await stopped(page);
   await expect(page.getByRole("status")).toHaveText("Disconnected");
   await expect(page.getByRole("alert")).toHaveCount(0);
@@ -285,6 +286,33 @@ test("blank screen captures are reported without uploading a frame", async ({
   await page.getByRole("button", { name: "Refresh" }).click();
   await expect(page.getByRole("alert")).toContainText(
     "The shared frame is blank",
+  );
+  expect(uploads).toBe(0);
+});
+
+test("a paused share never uploads the last frame", async ({ page }) => {
+  let uploads = 0;
+  page.on("request", (request) => {
+    if (request.url().endsWith("/frame")) uploads++;
+  });
+  await installFixture(page);
+  await page.goto("/overlay");
+  await page.getByRole("button", { name: "Start Exam" }).click();
+  await page.getByRole("checkbox").check();
+  await page.getByRole("button", { name: "Ask Permission" }).click();
+  await expect(page.getByText("Screen sharing is active")).toBeVisible();
+  await page.evaluate(() => {
+    Object.defineProperty(
+      (window as any).testStream.getVideoTracks()[0],
+      "muted",
+      {
+        value: true,
+      },
+    );
+  });
+  await page.getByRole("button", { name: "Refresh" }).click();
+  await expect(page.getByRole("alert")).toContainText(
+    "shared source is paused",
   );
   expect(uploads).toBe(0);
 });

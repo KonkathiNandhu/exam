@@ -66,15 +66,14 @@ export default function AnswerOverlay() {
     snapshot.answer?.status === "answered"
       ? snapshot.answer
       : null;
-  const unreadableFrame =
+  const reviewableFrame =
     compact &&
     sharing &&
     connected &&
     !busy &&
     requestId &&
     snapshot?.requestId === requestId &&
-    snapshot.state === "CAPTURING" &&
-    !snapshot.answer &&
+    (snapshot.state === "CAPTURING" || !!snapshot.answer) &&
     capturedFrame.current?.id === requestId
       ? capturedFrame.current
       : null;
@@ -176,7 +175,7 @@ export default function AnswerOverlay() {
     setBusy(false);
     refreshLock.current = false;
     retrySharper.current = snapshot.state === "CAPTURING" && !snapshot.answer;
-    if (!retrySharper.current) capturedFrame.current = null;
+    if (!retrySharper.current && !snapshot.answer) capturedFrame.current = null;
     if (snapshot.answer?.status === "answered") setMessage("");
     else if (snapshot.answer?.status === "uncertain") setMessage("Uncertain");
     else {
@@ -341,12 +340,14 @@ export default function AnswerOverlay() {
     const epoch = state.epoch;
     if (!c) return;
     try {
-      if (
-        !state.stream?.getVideoTracks().some((t) => t.readyState === "live") ||
-        !v?.videoWidth
-      )
+      const track = state.stream?.getVideoTracks()[0];
+      if (!track || track.readyState !== "live" || !v?.videoWidth)
         throw Error(
           "No screen frame is available. Disconnect and share the question window again.",
+        );
+      if (track.muted)
+        throw Error(
+          "The shared source is paused or unavailable. Restore the shared window or disconnect and select it again.",
         );
       const canvas = document.createElement("canvas");
       let frame: string;
@@ -490,7 +491,15 @@ export default function AnswerOverlay() {
         </div>
       )}
       {compact && sharing && (
-        <p className="compact-sharing">Screen sharing is active</p>
+        <p className="compact-sharing">
+          Screen sharing is active
+          {owner.current.stream?.getVideoTracks()[0]?.label && (
+            <>
+              <br />
+              {owner.current.stream.getVideoTracks()[0].label}
+            </>
+          )}
+        </p>
       )}
       <section className="floating-result" aria-live="polite" aria-busy={busy}>
         {answer ? (
@@ -544,21 +553,22 @@ export default function AnswerOverlay() {
           </svg>
         </button>
       </div>
-      {compact && (notice || connectionError) && (
-        <p role="alert" className="notice">
-          {notice || connectionError}
-          {unreadableFrame && (
-            <>
-              <br />
-              <a
-                href={unreadableFrame.jpeg}
-                download="answer-overlay-capture.jpg"
-              >
-                Save captured frame
-              </a>
-            </>
+      {compact && (notice || connectionError || reviewableFrame) && (
+        <div className="compact-diagnostics">
+          {(notice || connectionError) && (
+            <p role="alert" className="notice">
+              {notice || connectionError}
+            </p>
           )}
-        </p>
+          {reviewableFrame && (
+            <a
+              href={reviewableFrame.jpeg}
+              download="answer-overlay-capture.jpg"
+            >
+              Save captured frame
+            </a>
+          )}
+        </div>
       )}
     </main>
   );
