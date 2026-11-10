@@ -3,6 +3,7 @@ const {
   BrowserWindow,
   desktopCapturer,
   dialog,
+  globalShortcut,
   screen,
   session,
   systemPreferences,
@@ -62,6 +63,7 @@ async function openOverlay() {
       nodeIntegration: false,
     },
   });
+  window.setContentProtection(true);
 
   const contents = window.webContents;
   const allowCapture = (sender, permission, url, details) =>
@@ -124,6 +126,24 @@ async function openOverlay() {
   window.on("closed", () => {
     window = undefined;
   });
+  const shortcut = "Control+Alt+Enter";
+  if (
+    !globalShortcut.register(shortcut, () => {
+      if (!window || window.isDestroyed()) return;
+      app.focus({ steal: true });
+      if (window.isMinimized()) window.restore();
+      window.show();
+      window.focus();
+      window.webContents.focus();
+      void window.webContents
+        .executeJavaScript("document.activeElement?.blur()")
+        .catch(() => {});
+    })
+  ) {
+    window.on("page-title-updated", (event) => event.preventDefault());
+    window.setTitle("Answer Overlay · Ctrl+Alt+Enter unavailable");
+  }
+  app.once("will-quit", () => globalShortcut.unregister(shortcut));
   await window.loadURL(overlay.href);
 }
 

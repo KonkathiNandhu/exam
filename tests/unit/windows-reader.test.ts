@@ -33,9 +33,11 @@ test("Windows bridge restricts origin, requires selection, and cancels late read
       requestSingleInstanceLock: () => true,
       whenReady: () => Promise.resolve(),
       on() {},
+      once() {},
       quit() {},
     },
     BrowserWindow: Window,
+    globalShortcut: { register: () => true, unregister() {} },
     ipcMain: {
       handle: (name: string, handler: Function) => handlers.set(name, handler),
     },
@@ -57,23 +59,27 @@ test("Windows bridge restricts origin, requires selection, and cancels late read
         ? electron
         : name === "node:path"
           ? path
-          : {
-              execFile: (
-                _: string,
-                args: string[],
-                opts: any,
-                callback: Function,
-              ) => {
-                argumentsUsed = args;
-                options = opts;
-                complete = callback;
-                return {
-                  kill() {
-                    killed = true;
+          : name === "node:fs"
+            ? { mkdtempSync: () => "/tmp/mock-reader", rm() {} }
+            : name === "node:os"
+              ? { tmpdir: () => "/tmp" }
+              : {
+                  execFile: (
+                    _: string,
+                    args: string[],
+                    opts: any,
+                    callback: Function,
+                  ) => {
+                    argumentsUsed = args;
+                    options = opts;
+                    complete = callback;
+                    return {
+                      kill() {
+                        killed = true;
+                      },
+                    };
                   },
-                };
-              },
-            },
+                },
     process: { platform: "win32", env: { SystemRoot: "C:\\Windows" } },
     __dirname: "C:\\Prototype",
     URL,

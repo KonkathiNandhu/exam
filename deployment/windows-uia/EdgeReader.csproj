@@ -11,4 +11,5 @@
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <DebugType>none</DebugType>
   </PropertyGroup>
+  <ItemGroup><Compile Remove="portable/**/*.cs" /></ItemGroup>
 </Project>

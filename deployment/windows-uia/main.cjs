@@ -1,6 +1,17 @@
-const { app, BrowserWindow, dialog, ipcMain, screen } = require("electron");
+const {
+  app,
+  BrowserWindow,
+  dialog,
+  globalShortcut,
+  ipcMain,
+  screen,
+} = require("electron");
 const { execFile } = require("node:child_process");
 const path = require("node:path");
+const fs = require("node:fs");
+const os = require("node:os");
+if (process.env.ANSWER_OVERLAY_PROFILE)
+  app.setPath("userData", process.env.ANSWER_OVERLAY_PROFILE);
 const overlay = new URL(
   "https://exam-fhya.onrender.com/overlay?window=compact",
 );
@@ -21,17 +32,31 @@ function runReader(mode, source) {
         String(source.processId),
         source.started,
       );
+    const scratch = fs.mkdtempSync(
+      path.join(
+        process.env.ANSWER_OVERLAY_PROFILE || os.tmpdir(),
+        "answer-overlay-reader-",
+      ),
+    );
     const child = execFile(
       reader,
       args,
       {
         windowsHide: true,
+        env: { ...process.env, DOTNET_BUNDLE_EXTRACT_BASE_DIR: scratch },
         timeout: mode === "list" ? 20000 : 6000,
         maxBuffer: 200000,
         encoding: "utf8",
       },
       (error, stdout, stderr) => {
         if (pending === child) pending = undefined;
+        fs.rm(
+          scratch,
+          { recursive: true, force: true, maxRetries: 4 },
+          (error) => {
+            if (error) console.warn("Reader cleanup failed:", error.message);
+          },
+        );
         if (error) {
           reject(
             Error(
@@ -92,6 +117,10 @@ else {
         fullscreenable: false,
         maximizable: false,
         webPreferences: {
+          partition: "answer-overlay",
+          additionalArguments: process.env.ANSWER_OVERLAY_PROFILE
+            ? ["--portable-overlay"]
+            : [],
           preload: path.join(__dirname, "preload.cjs"),
           sandbox: true,
           contextIsolation: true,
@@ -160,6 +189,27 @@ else {
         verifySender(event);
         disconnect();
       });
+      ipcMain.handle("edge:close-portable", (event) => {
+        verifySender(event);
+        if (process.env.ANSWER_OVERLAY_PROFILE) win.close();
+      });
+      const shortcut = "Control+Alt+Enter";
+      if (
+        !globalShortcut.register(shortcut, () => {
+          if (!win || win.isDestroyed()) return;
+          if (win.isMinimized()) win.restore();
+          win.show();
+          win.focus();
+          win.webContents.focus();
+          void win.webContents
+            .executeJavaScript("document.activeElement?.blur()")
+            .catch(() => {});
+        })
+      ) {
+        win.on("page-title-updated", (event) => event.preventDefault());
+        win.setTitle("Answer Overlay · Ctrl+Alt+Enter unavailable");
+      }
+      app.once("will-quit", () => globalShortcut.unregister(shortcut));
       return win.loadURL(overlay.href);
     })
     .catch((error) => {

@@ -8,6 +8,7 @@ type EdgeReader = {
   select(): Promise<{ title: string }>;
   read(): Promise<AccessibleQuestion>;
   disconnect(): Promise<void>;
+  closePortable?(): Promise<void>;
 };
 
 type PictureInPictureAPI = {
@@ -127,12 +128,21 @@ export default function AnswerOverlay() {
     setBusy(false);
     setRequestId(null);
     setMessage(status);
-    if (c)
-      void api(`sessions/${c.id}/disconnect`, {}, c).catch(() => {
-        setNotice(
-          "Capture stopped locally. The disconnected backend session will expire under its existing lifecycle rules.",
-        );
-      });
+    const disconnected = c
+      ? api(`sessions/${c.id}/disconnect`, {}, c).catch(() => {
+          setNotice(
+            "Capture stopped locally. The disconnected backend session will expire under its existing lifecycle rules.",
+          );
+        })
+      : Promise.resolve();
+    if (status === "Disconnected" && edgeReader?.closePortable) {
+      void Promise.race([
+        disconnected,
+        new Promise((resolve) => setTimeout(resolve, 2000)),
+      ])
+        .then(() => edgeReader.closePortable?.())
+        .catch(() => {});
+    }
     setCredentials(null);
     if (closeWindow) {
       const child = state.pip;

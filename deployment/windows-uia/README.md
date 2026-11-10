@@ -2,13 +2,12 @@
 
 Requires Windows 10/11 x64 and Microsoft Edge. This is a compatibility prototype. Its native Edge reader is cross-compiled on macOS and has not been run on Windows yet.
 
-1. Extract the whole ZIP into a folder.
-2. Open an authorized practice quiz in Edge, with the question and all choices visible.
-3. Double-click AnswersLauncher.exe.
-4. Click Start Exam, confirm authorization, then Select Edge window.
-5. Choose the quiz window and click Refresh.
+1. Open an authorized practice quiz in Edge, with the question and all choices visible.
+2. Double-click the portable AnswersLauncher.exe.
+3. Click Start Exam, confirm authorization, then Select Edge window.
+4. Choose the quiz window and click Refresh.
 
-The small window displays the selected answer and its exact choice text. Enter refreshes when the overlay has focus. Delete or Backspace disconnects. Normal button keyboard activation takes precedence when a button has focus.
+Press Ctrl+Alt+Enter to focus the overlay from another app, then press Enter to refresh. The launcher keeps the selected Edge window and reads its current tab. Delete or Backspace disconnects. The portable launcher closes on Disconnect and removes the runtime and profile it extracted into its own temporary folder. Closing the overlay also removes that folder.
 
 The reader uses Windows UI Automation. It reads the selected Edge window only on Refresh, then checks the text again before showing the answer. No screen-sharing session, clipboard reading or screen image is used. The existing hosted server receives the visible text and ordered choices for processing.
 
