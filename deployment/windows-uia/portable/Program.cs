@@ -15,7 +15,7 @@ internal static class Program
         using var instance = new Mutex(true, @"Local\AnswerOverlayPortable", out bool first);
         if (!first)
         {
-            MessageBox(IntPtr.Zero, "Press Ctrl+Alt+Enter to open the running overlay.", "Answer Overlay", 0);
+            MessageBox(IntPtr.Zero, "Answer Overlay is already running. After selecting an Edge window, press Ctrl+Alt+Enter to refresh.", "Answer Overlay", 0);
             return 0;
         }
 

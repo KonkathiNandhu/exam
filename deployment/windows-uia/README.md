@@ -7,7 +7,7 @@ Requires Windows 10/11 x64 and Microsoft Edge. This is a compatibility prototype
 3. Click Start Exam, confirm authorization, then Select Edge window.
 4. Choose the quiz window and click Refresh.
 
-Press Ctrl+Alt+Enter to focus the overlay from another app, then press Enter to refresh. The launcher keeps the selected Edge window and reads its current tab. Delete or Backspace disconnects. The portable launcher closes on Disconnect and removes the runtime and profile it extracted into its own temporary folder. Closing the overlay also removes that folder.
+After selecting an Edge window, press Ctrl+Alt+Enter to refresh while keeping Edge focused. Enter also refreshes while the overlay is focused. The launcher keeps the selected Edge window and reads its current tab. Delete or Backspace disconnects while the overlay is focused. The portable launcher closes on Disconnect and removes the runtime and profile it extracted into its own temporary folder. Closing the overlay also removes that folder.
 
 The reader uses Windows UI Automation. It reads the selected Edge window only on Refresh, then checks the text again before showing the answer. No screen-sharing session, clipboard reading or screen image is used. The existing hosted server receives the visible text and ordered choices for processing.
 

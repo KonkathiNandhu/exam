@@ -7,4 +7,9 @@ contextBridge.exposeInMainWorld("edgeReader", {
     ? () => ipcRenderer.invoke("edge:close-portable")
     : undefined,
   disconnect: () => ipcRenderer.invoke("edge:disconnect"),
+  onRefreshShortcut: (callback) => {
+    const listener = () => callback();
+    ipcRenderer.on("browser:refresh-shortcut", listener);
+    return () => ipcRenderer.removeListener("browser:refresh-shortcut", listener);
+  },
 });

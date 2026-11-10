@@ -1,17 +1,22 @@
 const {
   app,
   BrowserWindow,
-  desktopCapturer,
   dialog,
   globalShortcut,
   screen,
   session,
-  systemPreferences,
+  ipcMain,
 } = require("electron");
+const path = require("node:path");
+const {
+  browsers,
+  listTabs,
+  createSource,
+  readTab,
+  runInTab,
+} = require("./read-browser.cjs");
 
-const overlay = new URL(
-  "https://exam-fhya.onrender.com/overlay?window=compact",
-);
+const overlay = new URL("http://localhost:39117/overlay?window=compact");
 let window;
 
 if (!app.requestSingleInstanceLock()) {
@@ -33,15 +38,6 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 async function openOverlay() {
-  if (
-    process.platform !== "darwin" ||
-    parseInt(process.getSystemVersion(), 10) < 15
-  ) {
-    throw new Error(
-      "macOS 15 or later is required for the screen-sharing picker.",
-    );
-  }
-
   const workArea = screen.getPrimaryDisplay().workArea;
   const width = Math.min(360, workArea.width);
   const height = Math.min(420, workArea.height);
@@ -58,6 +54,7 @@ async function openOverlay() {
     show: false,
     webPreferences: {
       session: overlaySession,
+      preload: path.join(__dirname, "preload.cjs"),
       sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
@@ -66,58 +63,91 @@ async function openOverlay() {
   window.setContentProtection(true);
 
   const contents = window.webContents;
-  const allowCapture = (sender, permission, url, details) =>
-    sender === contents &&
-    permission === "display-capture" &&
-    details?.isMainFrame !== false &&
-    URL.canParse(url) &&
-    new URL(url).origin === overlay.origin;
-
-  overlaySession.setPermissionCheckHandler(allowCapture);
-  overlaySession.setPermissionRequestHandler(
-    (sender, permission, callback, details) => {
-      callback(
-        allowCapture(sender, permission, details.requestingUrl, details),
-      );
-    },
+  overlaySession.setPermissionCheckHandler(() => false);
+  overlaySession.setPermissionRequestHandler((_, __, callback) =>
+    callback(false),
   );
-  const host = window;
-  let choosingSource = false;
-  overlaySession.setDisplayMediaRequestHandler(async (request, callback) => {
+  let source;
+  let selecting = false;
+  let generation = 0;
+  function verify(event) {
     if (
-      choosingSource ||
-      contents.isDestroyed() ||
-      request.frame !== contents.mainFrame ||
-      !allowCapture(contents, "display-capture", request.securityOrigin) ||
-      !request.userGesture ||
-      !request.videoRequested ||
-      request.audioRequested
-    ) {
-      callback(null);
-      return;
-    }
-
-    choosingSource = true;
-    let source;
-    let failure;
+      event.sender !== contents ||
+      event.senderFrame !== contents.mainFrame ||
+      new URL(event.senderFrame.url).origin !== overlay.origin
+    )
+      throw Error("Untrusted request.");
+  }
+  function disconnect() {
+    generation++;
+    const previous = source;
+    source = undefined;
+    if (previous) void runInTab(previous, "clear").catch(() => {});
+  }
+  async function choose(message, labels) {
+    const { response } = await dialog.showMessageBox(window, {
+      message,
+      buttons: [...labels, "Cancel"],
+      defaultId: labels.length,
+      cancelId: labels.length,
+    });
+    if (response >= labels.length) throw Error("Selection cancelled.");
+    return response;
+  }
+  ipcMain.handle("browser:select", async (event) => {
+    verify(event);
+    if (selecting) throw Error("The tab picker is already open.");
+    selecting = true;
+    disconnect();
+    const epoch = generation;
+    let candidate;
     try {
-      source = await chooseWindow(host);
-    } catch (error) {
-      failure = error;
+      const browser =
+        browsers[
+          await choose(
+            "Choose your browser",
+            browsers.map((item) => item.name),
+          )
+        ];
+      const tabs = await listTabs(browser);
+      if (epoch !== generation) throw Error("Selection cancelled.");
+      if (!tabs.length)
+        throw Error(`Open a practice tab in ${browser.name} and try again.`);
+      const tab =
+        tabs[
+          await choose(
+            "Choose the practice tab to read",
+            tabs.map(
+              (item) =>
+                `${String(item.title || item.origin).slice(0, 90)} · ${item.origin}`,
+            ),
+          )
+        ];
+      if (epoch !== generation) throw Error("Selection cancelled.");
+      candidate = createSource(browser, tab);
+      await readTab(candidate, "select");
+      if (epoch !== generation) throw Error("Selection cancelled.");
+      source = candidate;
+      return { title: tab.title || browser.name };
     } finally {
-      choosingSource = false;
-    }
-    if (contents.isDestroyed() || request.frame !== contents.mainFrame) return;
-    callback(source ? { video: source } : null);
-    if (failure && !host.isDestroyed()) {
-      host.focus();
-      await dialog.showMessageBox(host, {
-        type: "warning",
-        title: "Could not share a window",
-        message: failure instanceof Error ? failure.message : String(failure),
-      });
+      if (candidate && source !== candidate)
+        void runInTab(candidate, "clear").catch(() => {});
+      selecting = false;
     }
   });
+  ipcMain.handle("browser:read", async (event) => {
+    verify(event);
+    if (!source) throw Error("Select a browser tab first.");
+    const epoch = generation;
+    const input = await readTab(source);
+    if (epoch !== generation) throw Error("Read cancelled.");
+    return input;
+  });
+  ipcMain.handle("browser:disconnect", (event) => {
+    verify(event);
+    disconnect();
+  });
+  window.on("closed", disconnect);
 
   contents.setWindowOpenHandler(() => ({ action: "deny" }));
   contents.on("will-navigate", (event) => event.preventDefault());
@@ -129,15 +159,9 @@ async function openOverlay() {
   const shortcut = "Control+Alt+Enter";
   if (
     !globalShortcut.register(shortcut, () => {
-      if (!window || window.isDestroyed()) return;
-      app.focus({ steal: true });
-      if (window.isMinimized()) window.restore();
-      window.show();
-      window.focus();
-      window.webContents.focus();
-      void window.webContents
-        .executeJavaScript("document.activeElement?.blur()")
-        .catch(() => {});
+      if (!source || !window || window.isDestroyed()) return;
+      if (!window.isVisible() || window.isMinimized()) window.showInactive();
+      contents.send("browser:refresh-shortcut");
     })
   ) {
     window.on("page-title-updated", (event) => event.preventDefault());
@@ -145,65 +169,4 @@ async function openOverlay() {
   }
   app.once("will-quit", () => globalShortcut.unregister(shortcut));
   await window.loadURL(overlay.href);
-}
-
-async function chooseWindow(host) {
-  const permissionMessage =
-    "Allow this copy of Answer Overlay in System Settings → Privacy & Security → Screen & System Audio Recording, then quit and reopen it.";
-  const access = systemPreferences.getMediaAccessStatus("screen");
-  if (access === "denied" || access === "restricted")
-    throw Error(permissionMessage);
-  let timer;
-  let sources;
-  try {
-    sources = await Promise.race([
-      desktopCapturer.getSources({
-        types: ["window"],
-        thumbnailSize: { width: 0, height: 0 },
-      }),
-      new Promise((_, reject) => {
-        timer = setTimeout(() => {
-          reject(
-            Error(
-              "macOS did not return the window list. If you just enabled screen access, quit Answer Overlay and reopen it before trying again.",
-            ),
-          );
-        }, 10000);
-      }),
-    ]);
-  } catch (error) {
-    if (systemPreferences.getMediaAccessStatus("screen") !== "granted")
-      throw Error(permissionMessage);
-    const reason = error instanceof Error ? error.message : String(error);
-    throw Error(`Could not load the macOS window list. ${reason}`);
-  } finally {
-    clearTimeout(timer);
-  }
-  if (host.isDestroyed()) return;
-  if (systemPreferences.getMediaAccessStatus("screen") !== "granted")
-    throw Error(permissionMessage);
-
-  const ownWindowId = host.getMediaSourceId().split(":")[1];
-  const windows = sources.filter(
-    (source) =>
-      source.id.startsWith("window:") &&
-      source.id.split(":")[1] !== ownWindowId &&
-      source.name.trim(),
-  );
-  if (!windows.length)
-    throw Error("Open the browser window with the quiz and try again.");
-
-  const buttons = windows.map(({ name }) => name.replace(/\s+/g, " ").trim());
-  const cancelId = buttons.length;
-  host.focus();
-  const { response } = await dialog.showMessageBox(host, {
-    title: "Share a window",
-    message: "Choose the browser window with the quiz",
-    detail: "Only the selected window will be shared.",
-    buttons: [...buttons, "Cancel"],
-    defaultId: cancelId,
-    cancelId,
-    signal: AbortSignal.timeout(60000),
-  });
-  return windows[response];
 }

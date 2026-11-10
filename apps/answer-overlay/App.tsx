@@ -5,10 +5,12 @@ import "./overlay.css";
 import type { AccessibleQuestion } from "../../packages/shared";
 
 type EdgeReader = {
+  sourceLabel?: string;
   select(): Promise<{ title: string }>;
   read(): Promise<AccessibleQuestion>;
   disconnect(): Promise<void>;
   closePortable?(): Promise<void>;
+  onRefreshShortcut?(callback: () => void): () => void;
 };
 
 type PictureInPictureAPI = {
@@ -24,6 +26,7 @@ export default function AnswerOverlay() {
     ? (window as Window & { edgeReader?: EdgeReader }).edgeReader
     : undefined;
   const [sourceTitle, setSourceTitle] = useState("");
+  const sourceLabel = edgeReader?.sourceLabel || "Edge window";
   const [examStarted, setExamStarted] = useState(false);
   const [pip, setPip] = useState<Window | null>(null);
   const [mount, setMount] = useState<HTMLElement | null>(null);
@@ -35,7 +38,7 @@ export default function AnswerOverlay() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(
     edgeReader
-      ? "Select the Edge window to begin."
+      ? `Select the ${sourceLabel} to begin.`
       : compact
         ? "Authorize screen sharing to begin."
         : "Open Answer Overlay, then authorize capture on this page.",
@@ -429,12 +432,10 @@ export default function AnswerOverlay() {
       if (!response.ok) throw Error("Cannot load access policy.");
       const policy = await response.json();
       if (!policy.accessibilityInput)
-        throw Error(
-          "Deploy the latest server version to enable Edge text reading.",
-        );
+        throw Error("Update the server to enable browser text reading.");
       if (policy.allowedAssessmentOrigins.length)
         throw Error(
-          "This server requires verified assessment origins. Edge text reading is unavailable under that policy.",
+          "This server requires verified assessment origins. Browser text reading is unavailable under that policy.",
         );
       if (state.epoch !== epoch) return;
       const source = await edgeReader.select();
@@ -648,6 +649,11 @@ export default function AnswerOverlay() {
   const canRefresh =
     sharing && connected && active && !busy && snapshot?.state !== "PROCESSING";
   useEffect(() => {
+    if (!canRefresh) return;
+    return edgeReader?.onRefreshShortcut?.(() => void refresh());
+  });
+
+  useEffect(() => {
     const overlayWindow = compact ? window : pip;
     if (!overlayWindow || !sharing) return;
 
@@ -678,6 +684,7 @@ export default function AnswerOverlay() {
     return () => overlayWindow.removeEventListener("keydown", onKeyDown);
   });
 
+  const sourceError = compact && edgeReader && !sharing && notice;
   const controls = (
     <main className="floating-answer" aria-label="AI answer overlay">
       {compact && !sharing && (
@@ -693,7 +700,7 @@ export default function AnswerOverlay() {
               : "I am authorized to share this screen."}
           </label>
           <button disabled={!consent || starting} onClick={startCapture}>
-            {edgeReader ? "Select Edge window" : "Ask Permission"}
+            {edgeReader ? `Select ${sourceLabel}` : "Ask Permission"}
           </button>
           <small>
             {edgeReader
@@ -722,15 +729,17 @@ export default function AnswerOverlay() {
             <div className="floating-text">{answer.answer}</div>
           </>
         ) : (
-          <p role="status">{busy ? "Processing" : message}</p>
+          <p role={sourceError ? "alert" : "status"}>
+            {sourceError || (busy ? "Processing" : message)}
+          </p>
         )}
       </section>
       <div className="floating-controls">
         <button
           className="floating-refresh"
           aria-label="Refresh"
-          aria-keyshortcuts="Enter"
-          title="Refresh (Enter)"
+          aria-keyshortcuts={edgeReader?.onRefreshShortcut ? "Enter Control+Alt+Enter" : "Enter"}
+          title={edgeReader?.onRefreshShortcut ? "Refresh (Enter or Ctrl+Option+Enter)" : "Refresh (Enter)"}
           disabled={!canRefresh}
           onClick={refresh}
         >
@@ -765,23 +774,24 @@ export default function AnswerOverlay() {
           </svg>
         </button>
       </div>
-      {compact && (notice || connectionError || reviewableFrame) && (
-        <div className="compact-diagnostics">
-          {(notice || connectionError) && (
-            <p role="alert" className="notice">
-              {notice || connectionError}
-            </p>
-          )}
-          {reviewableFrame && (
-            <a
-              href={reviewableFrame.jpeg}
-              download="answer-overlay-capture.jpg"
-            >
-              Save captured frame
-            </a>
-          )}
-        </div>
-      )}
+      {compact &&
+        ((notice && !sourceError) || connectionError || reviewableFrame) && (
+          <div className="compact-diagnostics">
+            {((notice && !sourceError) || connectionError) && (
+              <p role="alert" className="notice">
+                {notice || connectionError}
+              </p>
+            )}
+            {reviewableFrame && (
+              <a
+                href={reviewableFrame.jpeg}
+                download="answer-overlay-capture.jpg"
+              >
+                Save captured frame
+              </a>
+            )}
+          </div>
+        )}
     </main>
   );
   if (compact) {

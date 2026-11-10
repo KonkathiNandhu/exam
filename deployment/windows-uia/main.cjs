@@ -196,14 +196,9 @@ else {
       const shortcut = "Control+Alt+Enter";
       if (
         !globalShortcut.register(shortcut, () => {
-          if (!win || win.isDestroyed()) return;
-          if (win.isMinimized()) win.restore();
-          win.show();
-          win.focus();
-          win.webContents.focus();
-          void win.webContents
-            .executeJavaScript("document.activeElement?.blur()")
-            .catch(() => {});
+          if (!selected || !win || win.isDestroyed()) return;
+          if (!win.isVisible() || win.isMinimized()) win.showInactive();
+          win.webContents.send("browser:refresh-shortcut");
         })
       ) {
         win.on("page-title-updated", (event) => event.preventDefault());
