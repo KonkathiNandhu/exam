@@ -163,6 +163,7 @@ else {
       );
       win.webContents.session.setPermissionCheckHandler(() => false);
       win.on("closed", disconnect);
+      require("./tray.cjs")(win, disconnect);
       ipcMain.handle("edge:select", async (event) => {
         verifySender(event);
         if (selecting) throw Error("Window selection is already open.");

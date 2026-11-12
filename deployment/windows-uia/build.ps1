@@ -15,6 +15,7 @@ try {
     $app = "$runtime/resources/app"
     New-Item -ItemType Directory -Path $app | Out-Null
     Copy-Item "$PSScriptRoot/main.cjs","$PSScriptRoot/preload.cjs","$PSScriptRoot/package.json" $app
+    Copy-Item "$PSScriptRoot/../tray.cjs" $app
     dotnet publish "$PSScriptRoot/EdgeReader.csproj" -c Release -r win-x64 --self-contained true -o "$stage/reader"
     if ($LASTEXITCODE -ne 0) { throw 'Reader build failed' }
     Copy-Item "$stage/reader/EdgeReader.exe" $app

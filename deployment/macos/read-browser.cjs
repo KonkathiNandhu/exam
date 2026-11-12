@@ -33,13 +33,19 @@ function readerScript(browser) {
   end run`;
 }
 
+const readerProcesses = new Set();
+function stopReaders() {
+  for (const child of readerProcesses) child.kill();
+  readerProcesses.clear();
+}
 function runScript(args, browser) {
   return new Promise((resolve, reject) => {
-    execFile(
+    const child = execFile(
       "/usr/bin/osascript",
       args,
       { timeout: 10000, maxBuffer: 180000 },
       (error, stdout, stderr) => {
+        readerProcesses.delete(child);
         if (!error) return resolve(stdout.trim());
         const detail = stderr.trim();
         reject(
@@ -54,6 +60,7 @@ function runScript(args, browser) {
         );
       },
     );
+    readerProcesses.add(child);
   });
 }
 
@@ -207,6 +214,7 @@ const extract = String.raw`(() => {
 })()`;
 
 module.exports = {
+  stopReaders,
   browsers,
   listTabs,
   createSource,

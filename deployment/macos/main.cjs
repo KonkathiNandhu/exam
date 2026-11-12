@@ -15,6 +15,7 @@ const {
   createSource,
   readTab,
   runInTab,
+  stopReaders,
 } = require("./read-browser.cjs");
 
 const overlay = new URL("https://exam-fhya.onrender.com/overlay?window=compact");
@@ -177,6 +178,8 @@ async function openOverlay() {
     disconnect();
   });
   window.on("closed", disconnect);
+  require("./tray.cjs")(window, disconnect);
+  app.on("before-quit", stopReaders);
 
   contents.setWindowOpenHandler(() => ({ action: "deny" }));
   contents.on("will-navigate", (event) => event.preventDefault());

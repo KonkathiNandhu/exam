@@ -57,7 +57,9 @@ test("Windows bridge restricts origin, requires selection, and cancels late read
   };
   runInNewContext(readFileSync("deployment/windows-uia/main.cjs", "utf8"), {
     require: (name: string) =>
-      name === "electron"
+      name === "./tray.cjs"
+        ? () => {}
+        : name === "electron"
         ? electron
         : name === "node:path"
           ? path

@@ -11,6 +11,7 @@ type EdgeReader = {
   disconnect(): Promise<void>;
   closePortable?(): Promise<void>;
   onRefreshShortcut?(callback: () => void): () => void;
+  onDisconnect?(callback: () => void): () => void;
 };
 
 type PictureInPictureAPI = {
@@ -648,6 +649,7 @@ export default function AnswerOverlay() {
   }
   const canRefresh =
     sharing && connected && active && !busy && snapshot?.state !== "PROCESSING";
+  useEffect(() => edgeReader?.onDisconnect?.(() => endSession(false)));
   useEffect(() => {
     if (!canRefresh) return;
     return edgeReader?.onRefreshShortcut?.(() => void refresh());
