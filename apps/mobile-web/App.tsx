@@ -61,6 +61,8 @@ export default function Mobile() {
   const [requestId, setRequestId] = useState<string | null>(null);
   const refreshLock = useRef(false);
   const active = !!s && !["DISCONNECTED", "EXPIRED"].includes(s.state);
+  const canRefresh =
+    active && connected && s.captureActive && !busy && s.state !== "PROCESSING";
   const a =
     connected &&
     active &&
@@ -85,7 +87,7 @@ export default function Mobile() {
     }
   }, [connected, active]);
   async function refresh() {
-    if (!c || refreshLock.current) return;
+    if (!c || !canRefresh || refreshLock.current) return;
     refreshLock.current = true;
     loading(true);
     setRequestId(null);
@@ -99,6 +101,21 @@ export default function Mobile() {
       refreshLock.current = false;
     }
   }
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (
+        event.key !== "Enter" || event.defaultPrevented || event.isComposing ||
+        event.altKey || event.ctrlKey || event.metaKey || event.shiftKey ||
+        (event.target instanceof Element &&
+          event.target.closest("button, a[href], input, textarea, select, [contenteditable]"))
+      ) return;
+      if (!canRefresh) return;
+      event.preventDefault();
+      if (!event.repeat) void refresh();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
   async function disconnect() {
     if (!c || !confirm("Disconnect and stop screen sharing on both devices?"))
       return;
@@ -162,13 +179,8 @@ export default function Mobile() {
         <button
           className="round-control refresh-control"
           aria-label="Refresh"
-          disabled={
-            !active ||
-            !connected ||
-            !s?.captureActive ||
-            busy ||
-            s?.state === "PROCESSING"
-          }
+          aria-keyshortcuts="Enter"
+          disabled={!canRefresh}
           onClick={refresh}
         >
           <svg

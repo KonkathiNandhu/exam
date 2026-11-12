@@ -111,6 +111,18 @@ export async function buildApp(
       .send(overlayLauncher(network.appOrigin));
   });
   app.post("/api/sessions", async (req, reply) => {
+    if (process.env.PERSONAL_USE_ONLY === "true") {
+      const tokens = (process.env.PERSONAL_DEVICE_TOKENS || "")
+        .split(",").map(token => token.trim()).filter(Boolean);
+      const supplied = req.headers["x-answer-device-token"];
+      if (
+        tokens.length !== 2 ||
+        new Set(tokens).size !== 2 ||
+        tokens.some(token => token.length < 43) ||
+        typeof supplied !== "string" ||
+        !tokens.some(token => same(token, supplied))
+      ) return reply.code(403).send({ error: "This device is not authorized." });
+    }
     const body = z
       .object({ sourceOrigin: z.string().url().optional() })
       .parse(req.body || {});

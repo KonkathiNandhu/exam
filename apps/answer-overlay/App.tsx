@@ -6,7 +6,7 @@ import type { AccessibleQuestion } from "../../packages/shared";
 
 type EdgeReader = {
   sourceLabel?: string;
-  select(): Promise<{ title: string }>;
+  select(): Promise<{ title: string } | null>;
   read(): Promise<AccessibleQuestion>;
   disconnect(): Promise<void>;
   closePortable?(): Promise<void>;
@@ -439,7 +439,7 @@ export default function AnswerOverlay() {
         );
       if (state.epoch !== epoch) return;
       const source = await edgeReader.select();
-      if (state.epoch !== epoch) return;
+      if (!source || state.epoch !== epoch) return;
       c = await api("sessions", {});
       if (state.epoch !== epoch) {
         void api(`sessions/${c!.id}/disconnect`, {}, c!).catch(() => {});

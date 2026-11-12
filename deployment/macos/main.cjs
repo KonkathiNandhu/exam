@@ -8,6 +8,7 @@ const {
   ipcMain,
 } = require("electron");
 const path = require("node:path");
+const fs = require("node:fs");
 const {
   browsers,
   listTabs,
@@ -16,7 +17,7 @@ const {
   runInTab,
 } = require("./read-browser.cjs");
 
-const overlay = new URL("http://localhost:39117/overlay?window=compact");
+const overlay = new URL("https://exam-fhya.onrender.com/overlay?window=compact");
 let window;
 
 if (!app.requestSingleInstanceLock()) {
@@ -42,6 +43,16 @@ async function openOverlay() {
   const width = Math.min(360, workArea.width);
   const height = Math.min(420, workArea.height);
   const overlaySession = session.fromPartition("answer-overlay");
+  overlaySession.webRequest.onBeforeSendHeaders(
+    { urls: [overlay.origin + "/api/sessions"] },
+    (details, callback) => {
+      try {
+        const token = fs.readFileSync(path.join(app.getPath("userData"), "device-token.txt"), "utf8").trim();
+        if (token) details.requestHeaders["X-Answer-Device-Token"] = token;
+      } catch {}
+      callback({ requestHeaders: details.requestHeaders });
+    },
+  );
   window = new BrowserWindow({
     title: "Answer Overlay",
     width,
@@ -60,9 +71,29 @@ async function openOverlay() {
       nodeIntegration: false,
     },
   });
-  window.setContentProtection(true);
-
   const contents = window.webContents;
+  let captureProtected = true;
+  let refreshShortcutAvailable = true;
+  function updateWindowTitle() {
+    const protection = captureProtected ? "On" : "Off";
+    const shortcut = refreshShortcutAvailable ? "" : " · Ctrl+Alt+Enter unavailable";
+    window.setTitle(`Answer Overlay · Capture protection ${protection}${shortcut}`);
+  }
+  window.setContentProtection(captureProtected);
+  window.on("page-title-updated", (event) => event.preventDefault());
+  updateWindowTitle();
+  contents.on("before-input-event", (event, input) => {
+    if (
+      input.type !== "keyDown" ||
+      !input.control || input.alt || input.meta || input.shift ||
+      input.key.toLowerCase() !== "h"
+    ) return;
+    event.preventDefault();
+    if (input.isAutoRepeat) return;
+    captureProtected = !captureProtected;
+    window.setContentProtection(captureProtected);
+    updateWindowTitle();
+  });
   overlaySession.setPermissionCheckHandler(() => false);
   overlaySession.setPermissionRequestHandler((_, __, callback) =>
     callback(false),
@@ -91,8 +122,7 @@ async function openOverlay() {
       defaultId: labels.length,
       cancelId: labels.length,
     });
-    if (response >= labels.length) throw Error("Selection cancelled.");
-    return response;
+    return response < labels.length ? response : null;
   }
   ipcMain.handle("browser:select", async (event) => {
     verify(event);
@@ -102,31 +132,30 @@ async function openOverlay() {
     const epoch = generation;
     let candidate;
     try {
-      const browser =
-        browsers[
-          await choose(
-            "Choose your browser",
-            browsers.map((item) => item.name),
-          )
-        ];
+      const browserIndex = await choose(
+        "Choose your browser",
+        browsers.map((item) => item.name),
+      );
+      if (browserIndex === null || epoch !== generation) return null;
+      const browser = browsers[browserIndex];
       const tabs = await listTabs(browser);
-      if (epoch !== generation) throw Error("Selection cancelled.");
+      if (epoch !== generation) return null;
       if (!tabs.length)
         throw Error(`Open a practice tab in ${browser.name} and try again.`);
-      const tab =
-        tabs[
-          await choose(
-            "Choose the practice tab to read",
-            tabs.map(
-              (item) =>
-                `${String(item.title || item.origin).slice(0, 90)} · ${item.origin}`,
-            ),
-          )
-        ];
-      if (epoch !== generation) throw Error("Selection cancelled.");
+      const tabIndex = await choose(
+        "Choose the practice tab to read",
+        tabs.map(
+          (item) =>
+            `${String(item.title || item.origin).slice(0, 90)} · ${item.origin}`,
+        ),
+      );
+      if (tabIndex === null || epoch !== generation) return null;
+      const tab = tabs[tabIndex];
       candidate = createSource(browser, tab);
-      await readTab(candidate, "select");
-      if (epoch !== generation) throw Error("Selection cancelled.");
+      const result = await runInTab(candidate, "select");
+      if (result.error) throw Error(result.error);
+      if (result.selected !== true) throw Error("The browser could not confirm tab selection.");
+      if (epoch !== generation) return null;
       source = candidate;
       return { title: tab.title || browser.name };
     } finally {
@@ -164,8 +193,8 @@ async function openOverlay() {
       contents.send("browser:refresh-shortcut");
     })
   ) {
-    window.on("page-title-updated", (event) => event.preventDefault());
-    window.setTitle("Answer Overlay · Ctrl+Alt+Enter unavailable");
+    refreshShortcutAvailable = false;
+    updateWindowTitle();
   }
   app.once("will-quit", () => globalShortcut.unregister(shortcut));
   await window.loadURL(overlay.href);

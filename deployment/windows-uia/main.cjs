@@ -127,7 +127,35 @@ else {
           nodeIntegration: false,
         },
       });
+      let captureProtected = true;
+      win.setContentProtection(captureProtected);
+      win.on("page-title-updated", (event) => event.preventDefault());
+      win.webContents.on("before-input-event", (event, input) => {
+        if (
+          input.type !== "keyDown" ||
+          !input.control ||
+          input.alt ||
+          input.meta ||
+          input.shift ||
+          input.key.toLowerCase() !== "h" ||
+          input.isAutoRepeat
+        ) return;
+        event.preventDefault();
+        captureProtected = !captureProtected;
+        win.setContentProtection(captureProtected);
+      });
       win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+      win.webContents.session.webRequest.onBeforeSendHeaders(
+        { urls: [overlay.origin + "/api/sessions"] },
+        (details, callback) => {
+          try {
+            const tokenFile = path.join(app.getPath("appData"), "AnswerOverlay", "device-token.txt");
+            const token = fs.readFileSync(tokenFile, "utf8").trim();
+            if (token) details.requestHeaders["X-Answer-Device-Token"] = token;
+          } catch {}
+          callback({ requestHeaders: details.requestHeaders });
+        },
+      );
       win.webContents.on("will-navigate", (event) => event.preventDefault());
       win.webContents.on("will-redirect", (event) => event.preventDefault());
       win.webContents.session.setPermissionRequestHandler((_, __, callback) =>

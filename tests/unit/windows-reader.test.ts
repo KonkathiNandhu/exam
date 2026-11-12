@@ -18,6 +18,7 @@ test("Windows bridge restricts origin, requires selection, and cancels late read
       setWindowOpenHandler() {},
       on() {},
       session: {
+        webRequest: { onBeforeSendHeaders() {} },
         setPermissionRequestHandler() {},
         setPermissionCheckHandler() {},
       },
@@ -26,6 +27,7 @@ test("Windows bridge restricts origin, requires selection, and cancels late read
       return false;
     }
     on() {}
+    setContentProtection() {}
     loadURL() {}
   }
   const electron = {

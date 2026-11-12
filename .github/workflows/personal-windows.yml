@@ -1,0 +1,26 @@
+name: Personal Windows launcher
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'deployment/windows-uia/**'
+      - '.github/workflows/personal-windows.yml'
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.100'
+      - name: Build current Windows source
+        shell: pwsh
+        run: ./deployment/windows-uia/build.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AnswerOverlay-Windows-x64
+          path: output/AnswerOverlay-Windows-x64.zip
+          if-no-files-found: error

@@ -95,9 +95,12 @@ async function runInTab(source, action) {
     const key = ${JSON.stringify(key)};
     if (location.origin !== ${JSON.stringify(origin)}) return JSON.stringify({error: "This tab changed sites. Select it again."});
     if (${JSON.stringify(action)} === "clear") { sessionStorage.removeItem(key); return "{}"; }
-    if (${JSON.stringify(action)} === "select") sessionStorage.setItem(key, "selected");
-    if (sessionStorage.getItem(key) !== "selected") return JSON.stringify({error: "The selected tab moved or closed. Select it again."});
     try {
+      if (${JSON.stringify(action)} === "select") {
+        sessionStorage.setItem(key, "selected");
+        return JSON.stringify({selected: true});
+      }
+      if (sessionStorage.getItem(key) !== "selected") return JSON.stringify({error: "The selected tab moved or closed. Select it again."});
       return ${extract};
     } catch {
       return JSON.stringify({error: "The question layout could not be read in this tab."});
@@ -119,8 +122,8 @@ async function runInTab(source, action) {
   catch { throw Error(`${browser.name} returned invalid page data. Re-select the tab and try again.`); }
 }
 
-async function readTab(source, action = "read") {
-  const result = await runInTab(source, action);
+async function readTab(source) {
+  const result = await runInTab(source, "read");
   if (result.error) throw Error(result.error);
   if (
     typeof result.text !== "string" ||
@@ -151,22 +154,51 @@ const extract = String.raw`(() => {
       .map(option => option.innerText.replace(/^[A-H1-8]\)\s*/, "").trim());
     return JSON.stringify({text, choices});
   }
-  const visible = node => node && node.getClientRects().length && getComputedStyle(node).visibility !== "hidden";
-  const radios = [...document.querySelectorAll('input[type="radio"]')].filter(visible);
-  if (radios.length < 2) return fail("Keep one question and its answer choices visible.");
-  const firstName = radios[0].name;
-  const group = radios.filter(input => input.name === firstName);
+  const visible = node => node && node.getClientRects().length && getComputedStyle(node).visibility === "visible";
+  const w3schools = /^(www\.)?w3schools\.com$/i.test(location.hostname);
+  if (w3schools && /\/quiz\.asp$/i.test(location.pathname))
+    return fail("The selected tab is the quiz introduction. Select the tab showing Question 1 and its choices.");
+  const quizPage = w3schools && location.pathname === "/quiztest/quiztest.asp";
+  const quizForm = quizPage && [...document.forms].find(form =>
+    [...form.querySelectorAll("button, input[type=submit]")].some(button =>
+      visible(button) && /^Next\b/i.test((button.innerText || button.value || "").trim())
+    ) && form.querySelectorAll('input[type="radio"]').length >= 2
+  );
+  const root = quizForm || document;
+  const labelsOf = input => [...new Set([...(input.labels || []), input.closest("label")])].filter(visible);
   const textOf = input => {
-    const labelled = input.id && document.querySelector('label[for="' + CSS.escape(input.id) + '"]');
-    const label = labelled || input.closest("label");
-    if (label) return label.innerText.trim();
+    const labels = labelsOf(input);
+    if (labels.length) return labels.map(label => label.innerText.trim()).join(" ").trim();
+    if (!visible(input)) return "";
+    const references = (input.getAttribute("aria-labelledby") || "").split(/\s+/);
+    const named = references.map(id => document.getElementById(id)?.textContent?.trim()).filter(Boolean).join(" ");
+    if (named) return named;
+    const ariaLabel = input.getAttribute("aria-label")?.trim();
+    if (ariaLabel) return ariaLabel;
+    if (input.matches('[role="radio"]')) return input.innerText.trim();
     const sibling = input.previousElementSibling || input.nextElementSibling;
-    if (sibling && sibling.innerText.trim()) return sibling.innerText.trim();
-    const parent = input.parentElement;
-    return (parent?.innerText || "").replace(input.value || "", "").trim();
+    if (visible(sibling) && sibling.innerText?.trim()) return sibling.innerText.trim();
+    return input.parentElement?.innerText.trim() || "";
   };
-  const choices = group.map(textOf).filter(Boolean);
-  if (choices.length < 2) return fail("Keep one question and its answer choices visible.");
+  const controls = [...root.querySelectorAll('input[type="radio"], [role="radio"]')]
+    .filter(input => input.matches('input[type="radio"]')
+      ? !input.parentElement?.closest('[role="radio"]')
+      : !input.querySelector('[role="radio"]'));
+  const groups = new Map();
+  for (const input of controls) {
+    if (!visible(input) && !labelsOf(input).length) continue;
+    const scope = input.closest('[role="radiogroup"]') || input.form || input.closest("fieldset") || document;
+    const name = input.name || "";
+    if (!groups.has(scope)) groups.set(scope, new Map());
+    const names = groups.get(scope);
+    if (!names.has(name)) names.set(name, []);
+    names.get(name).push(textOf(input));
+  }
+  const candidates = [...groups.values()].flatMap(names => [...names.values()])
+    .filter(group => group.length >= 2);
+  if (candidates.length !== 1 || candidates[0].some(choice => !choice))
+    return fail("Show one question with readable answer choices, then press Refresh.");
+  const [choices] = candidates;
   // Some quiz sites render the question as a plain text node immediately
   // before the radio group. Use the visible page text as the source context
   // so the text model can locate that question even without semantic markup.
