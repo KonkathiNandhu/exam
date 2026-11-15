@@ -27,6 +27,7 @@ test("Windows bridge restricts origin, requires selection, and cancels late read
       return false;
     }
     on() {}
+    emit() {}
     setContentProtection() {}
     loadURL() {}
   }

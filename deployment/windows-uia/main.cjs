@@ -80,6 +80,7 @@ function runReader(mode, source) {
 }
 
 function disconnect() {
+  win?.emit("answer-stopped");
   generation++;
   selected = undefined;
   pending?.kill();
@@ -114,6 +115,9 @@ else {
         x: area.x + Math.max(0, area.width - 376),
         y: area.y + Math.max(0, area.height - 476),
         alwaysOnTop: true,
+        frame: false,
+        transparent: true,
+        backgroundColor: "#00000000",
         fullscreenable: false,
         maximizable: false,
         webPreferences: {
@@ -187,6 +191,7 @@ else {
           if (epoch !== generation || !windows[response])
             throw Error("Selection cancelled.");
           selected = windows[response];
+          win.emit("answer-ready");
           return { title: selected.title };
         } finally {
           selecting = false;
@@ -222,7 +227,7 @@ else {
         verifySender(event);
         if (process.env.ANSWER_OVERLAY_PROFILE) win.close();
       });
-      const shortcut = "Control+Alt+Enter";
+      const shortcut = "CommandOrControl+Shift+R";
       if (
         !globalShortcut.register(shortcut, () => {
           if (!selected || !win || win.isDestroyed()) return;
@@ -231,7 +236,7 @@ else {
         })
       ) {
         win.on("page-title-updated", (event) => event.preventDefault());
-        win.setTitle("Answer Overlay · Ctrl+Alt+Enter unavailable");
+        win.setTitle("Answer Overlay · Ctrl+Shift+R unavailable");
       }
       app.once("will-quit", () => globalShortcut.unregister(shortcut));
       return win.loadURL(overlay.href);

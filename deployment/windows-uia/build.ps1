@@ -12,10 +12,17 @@ try {
     if ((Get-FileHash "$stage/electron.zip" -Algorithm SHA256).Hash -ne $expected) { throw 'Electron checksum mismatch' }
     Expand-Archive "$stage/electron.zip" $runtime
     Rename-Item "$runtime/electron.exe" 'AnswersLauncher.exe'
+    $smoke = Start-Process "$runtime/AnswersLauncher.exe" -ArgumentList "`"$PSScriptRoot/smoke.cjs`"" -Wait -PassThru -RedirectStandardOutput "$stage/smoke.log" -RedirectStandardError "$stage/smoke-error.log"
+    Get-Content "$stage/smoke.log"
+    if ($smoke.ExitCode -ne 0) {
+        Get-Content "$stage/smoke-error.log"
+        throw 'Windows native smoke checks failed'
+    }
     $app = "$runtime/resources/app"
     New-Item -ItemType Directory -Path $app | Out-Null
     Copy-Item "$PSScriptRoot/main.cjs","$PSScriptRoot/preload.cjs","$PSScriptRoot/package.json" $app
     Copy-Item "$PSScriptRoot/../tray.cjs" $app
+    Copy-Item "$root/apps/answer-overlay/overlay.css" $app
     dotnet publish "$PSScriptRoot/EdgeReader.csproj" -c Release -r win-x64 --self-contained true -o "$stage/reader"
     if ($LASTEXITCODE -ne 0) { throw 'Reader build failed' }
     Copy-Item "$stage/reader/EdgeReader.exe" $app

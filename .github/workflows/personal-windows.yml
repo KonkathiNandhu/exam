@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - 'deployment/tray.cjs'
       - 'deployment/windows-uia/**'
       - '.github/workflows/personal-windows.yml'
 permissions:

@@ -740,8 +740,8 @@ export default function AnswerOverlay() {
         <button
           className="floating-refresh"
           aria-label="Refresh"
-          aria-keyshortcuts={edgeReader?.onRefreshShortcut ? "Enter Control+Alt+Enter" : "Enter"}
-          title={edgeReader?.onRefreshShortcut ? "Refresh (Enter or Ctrl+Option+Enter)" : "Refresh (Enter)"}
+          aria-keyshortcuts={edgeReader?.onRefreshShortcut ? "Enter Meta+Shift+R Control+Shift+R" : "Enter"}
+          title={edgeReader?.onRefreshShortcut ? "Refresh (Cmd/Ctrl+Shift+R)" : "Refresh (Enter)"}
           disabled={!canRefresh}
           onClick={refresh}
         >

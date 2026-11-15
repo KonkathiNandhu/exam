@@ -61,6 +61,9 @@ async function openOverlay() {
     x: workArea.x + Math.max(0, workArea.width - width - 16),
     y: workArea.y + Math.max(0, workArea.height - height - 16),
     alwaysOnTop: true,
+    transparent: true,
+    frame: false,
+    backgroundColor: "#00000000",
     fullscreenable: false,
     maximizable: false,
     show: false,
@@ -73,11 +76,14 @@ async function openOverlay() {
     },
   });
   const contents = window.webContents;
+  window.setAlwaysOnTop(true, "floating");
+  window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  window.setHiddenInMissionControl(false);
   let captureProtected = true;
   let refreshShortcutAvailable = true;
   function updateWindowTitle() {
     const protection = captureProtected ? "On" : "Off";
-    const shortcut = refreshShortcutAvailable ? "" : " · Ctrl+Alt+Enter unavailable";
+    const shortcut = refreshShortcutAvailable ? "" : " · Cmd+Shift+R unavailable";
     window.setTitle(`Answer Overlay · Capture protection ${protection}${shortcut}`);
   }
   window.setContentProtection(captureProtected);
@@ -111,6 +117,7 @@ async function openOverlay() {
       throw Error("Untrusted request.");
   }
   function disconnect() {
+    window?.emit("answer-stopped");
     generation++;
     const previous = source;
     source = undefined;
@@ -158,6 +165,7 @@ async function openOverlay() {
       if (result.selected !== true) throw Error("The browser could not confirm tab selection.");
       if (epoch !== generation) return null;
       source = candidate;
+      window.emit("answer-ready");
       return { title: tab.title || browser.name };
     } finally {
       if (candidate && source !== candidate)
@@ -188,7 +196,7 @@ async function openOverlay() {
   window.on("closed", () => {
     window = undefined;
   });
-  const shortcut = "Control+Alt+Enter";
+  const shortcut = "CommandOrControl+Shift+R";
   if (
     !globalShortcut.register(shortcut, () => {
       if (!source || !window || window.isDestroyed()) return;
