@@ -1,8 +1,26 @@
-const { app, Tray, Menu, nativeImage, globalShortcut, ipcMain, screen } = require("electron");
+const { app, Tray, Menu, nativeImage, globalShortcut, ipcMain, screen, desktopCapturer, dialog } = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
 
 module.exports = function installTray(win, disconnectNative) {
+  win.webContents.session.setDisplayMediaRequestHandler(async (request, callback) => {
+    try {
+      if (request.frame !== win.webContents.mainFrame || new URL(request.frame.url).origin !== "https://exam-fhya.onrender.com") return callback({});
+      const sources = (await desktopCapturer.getSources({ types: ["window"], thumbnailSize: { width: 0, height: 0 } }))
+        .filter(source => source.id !== win.getMediaSourceId());
+      if (!sources.length) return callback({});
+      const { response } = await dialog.showMessageBox(win, {
+        title: "Select authorized exam window", message: "Choose the window to share. Capture remains active until Disconnect; only Refresh sends a frame for analysis.",
+        buttons: [...sources.map(source => source.name), "Cancel"], cancelId: sources.length, defaultId: sources.length,
+      });
+      callback(response < sources.length ? { video: sources[response] } : {});
+    } catch { callback({}); }
+  });
+  ipcMain.handle("overlay:quit", (event) => {
+    if (event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame) throw Error("Unauthorized window");
+    disconnectNative();
+    app.quit();
+  });
   const backgroundOpacity = 0.72;
   let windowOpacity = 0.9;
   win.setOpacity(windowOpacity);

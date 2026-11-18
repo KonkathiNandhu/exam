@@ -10,6 +10,7 @@ type EdgeReader = {
   read(): Promise<AccessibleQuestion>;
   disconnect(): Promise<void>;
   closePortable?(): Promise<void>;
+  quit?(): Promise<void>;
   onRefreshShortcut?(callback: () => void): () => void;
   onDisconnect?(callback: () => void): () => void;
 };
@@ -23,9 +24,11 @@ function pipAPI(): PictureInPictureAPI | undefined {
 }
 export default function AnswerOverlay() {
   const compact = new URLSearchParams(location.search).get("window") !== "pip";
-  const edgeReader = compact
+  const [desktopMode, setDesktopMode] = useState(false);
+  const nativeReader = compact
     ? (window as Window & { edgeReader?: EdgeReader }).edgeReader
     : undefined;
+  const edgeReader = desktopMode ? undefined : nativeReader;
   const [sourceTitle, setSourceTitle] = useState("");
   const sourceLabel = edgeReader?.sourceLabel || "Edge window";
   const [examStarted, setExamStarted] = useState(false);
@@ -139,14 +142,6 @@ export default function AnswerOverlay() {
           );
         })
       : Promise.resolve();
-    if (status === "Disconnected" && edgeReader?.closePortable) {
-      void Promise.race([
-        disconnected,
-        new Promise((resolve) => setTimeout(resolve, 2000)),
-      ])
-        .then(() => edgeReader.closePortable?.())
-        .catch(() => {});
-    }
     setCredentials(null);
     if (closeWindow) {
       const child = state.pip;
@@ -649,10 +644,10 @@ export default function AnswerOverlay() {
   }
   const canRefresh =
     sharing && connected && active && !busy && snapshot?.state !== "PROCESSING";
-  useEffect(() => edgeReader?.onDisconnect?.(() => endSession(false)));
+  useEffect(() => nativeReader?.onDisconnect?.(() => endSession(false)));
   useEffect(() => {
     if (!canRefresh) return;
-    return edgeReader?.onRefreshShortcut?.(() => void refresh());
+    return nativeReader?.onRefreshShortcut?.(() => void refresh());
   });
 
   useEffect(() => {
@@ -691,6 +686,7 @@ export default function AnswerOverlay() {
     <main className="floating-answer" aria-label="AI answer overlay">
       {compact && !sharing && (
         <div className="compact-permission">
+          {nativeReader && <label>Read from <select value={desktopMode ? "desktop" : "browser"} disabled={starting || sharing} onChange={event => setDesktopMode(event.target.value === "desktop")}><option value="browser">Browser tab</option><option value="desktop">Desktop application window</option></select></label>}
           <label className="consent">
             <input
               type="checkbox"
@@ -707,7 +703,7 @@ export default function AnswerOverlay() {
           <small>
             {edgeReader
               ? "Reads visible text and choices only when you refresh."
-              : "Select the browser window with the quiz in the sharing picker."}
+              : "Select the authorized exam application window. Capture stays active until Disconnect. Only Refresh sends a frame for analysis."}
           </small>
         </div>
       )}
@@ -775,6 +771,7 @@ export default function AnswerOverlay() {
             <path d="M12 3v9M7 5a8 8 0 1 0 10 0" />
           </svg>
         </button>
+        {nativeReader?.quit && <button className="floating-quit" aria-label="Quit launcher" title="Quit launcher" onClick={() => { endSession(false); void nativeReader.quit?.(); }}>×</button>}
       </div>
       {compact &&
         ((notice && !sourceError) || connectionError || reviewableFrame) && (

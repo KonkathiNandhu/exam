@@ -81,6 +81,12 @@
   border-color: #f0d2d2;
   background: #fff5f5;
 }
+.floating-quit {
+  color: #e5e7eb;
+  background: #292929;
+  border-color: #6b7280;
+  font-size: 30px;
+}
 .floating-controls button:focus-visible {
   outline: 3px solid currentColor;
   outline-offset: 3px;

@@ -5,7 +5,7 @@ let closeHovered = false;
 ipcRenderer.on("browser:keyboard-mode", () => { keyboardMode = true; });
 window.addEventListener("mousemove", event => {
   if (!keyboardMode) return;
-  const close = document.querySelector(".floating-disconnect");
+  const close = document.querySelector(".floating-disconnect:hover, .floating-quit:hover");
   const rect = close?.getBoundingClientRect();
   const hovered = !!rect && event.clientX >= rect.left && event.clientX <= rect.right &&
     event.clientY >= rect.top && event.clientY <= rect.bottom;
@@ -20,6 +20,7 @@ window.addEventListener("mouseleave", () => {
 });
 
 contextBridge.exposeInMainWorld("edgeReader", {
+  quit: () => ipcRenderer.invoke("overlay:quit"),
   select: () => ipcRenderer.invoke("edge:select"),
   read: () => ipcRenderer.invoke("edge:read"),
   closePortable: process.argv.includes("--portable-overlay")
